@@ -4,5 +4,6 @@
 
 pub mod file;
 pub mod grep;
+pub mod lifecycle;
 pub mod search;
 pub mod workspace;

@@ -45,6 +45,7 @@ const SWEEP_INTERVAL: Duration = Duration::from_secs(30);
         (name = "workspaces", description = "Indexed roots and their lifecycle"),
         (name = "search", description = "Fuzzy path search and glob matching"),
         (name = "grep", description = "Content search"),
+        (name = "lifecycle", description = "Rescan, git refresh, and ranking feedback"),
     ),
 )]
 pub struct ApiDoc;
@@ -66,6 +67,12 @@ pub fn build(config: Config) -> (Router, utoipa::openapi::OpenApi, AppState) {
         .routes(routes!(routes::search::glob))
         .routes(routes!(routes::grep::grep))
         .routes(routes!(routes::grep::multi_grep))
+        .routes(routes!(routes::lifecycle::rescan))
+        .routes(routes!(routes::lifecycle::git_refresh))
+        .routes(routes!(routes::lifecycle::track_access))
+        .routes(routes!(routes::lifecycle::track_query))
+        .routes(routes!(routes::lifecycle::history))
+        .routes(routes!(routes::lifecycle::parse_query))
         .with_state(state.clone())
         .split_for_parts();
 

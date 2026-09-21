@@ -30,6 +30,48 @@
         }
       }
     },
+    "/v1/parse-query": {
+      "post": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Show how the parser decomposes a query, without searching anything.",
+        "description": "Needs no workspace: parsing depends only on the preset.",
+        "operationId": "parse_query",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParseQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Parsed decomposition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParseQueryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces": {
       "get": {
         "tags": [
@@ -196,6 +238,59 @@
         }
       }
     },
+    "/v1/workspaces/{id}/git/refresh": {
+      "post": {
+        "tags": [
+          "lifecycle"
+        ],
+        "summary": "Refresh cached git status.",
+        "description": "Worth calling after a commit or a branch switch: the watcher notices file changes, but\nstatus is cached per file and a `git checkout` can change many at once.",
+        "operationId": "git_refresh",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workspace id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Statuses refreshed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitRefreshResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Index not ready yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{id}/glob": {
       "post": {
         "tags": [
@@ -340,6 +435,58 @@
         }
       }
     },
+    "/v1/workspaces/{id}/history": {
+      "get": {
+        "tags": [
+          "lifecycle"
+        ],
+        "summary": "A previous query from this workspace's history, newest first.",
+        "operationId": "history",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workspace id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "0 is the most recent",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Historical query, or null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{id}/multi-grep": {
       "post": {
         "tags": [
@@ -401,6 +548,59 @@
           },
           "503": {
             "description": "Index not ready yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{id}/rescan": {
+      "post": {
+        "tags": [
+          "lifecycle"
+        ],
+        "summary": "Force a rescan now.",
+        "description": "The automatic interval is derived from measured cost and can be up to 30 minutes on a\nlarge share, so a client that knows it changed something should say so rather than wait.\nReturns `202`: the rescan runs in the background, and the returned resource shows\n`isScanning`.",
+        "operationId": "rescan",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workspace id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Rescan triggered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceResource"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Index not ready, or a rescan was throttled",
             "content": {
               "application/json": {
                 "schema": {
@@ -607,6 +807,123 @@
           }
         }
       }
+    },
+    "/v1/workspaces/{id}/track-access": {
+      "post": {
+        "tags": [
+          "lifecycle"
+        ],
+        "summary": "Report that a file was opened.",
+        "operationId": "track_access",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workspace id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackAccessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackAccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Path missing or outside the workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{id}/track-query": {
+      "post": {
+        "tags": [
+          "lifecycle"
+        ],
+        "summary": "Report which result a query led to.",
+        "operationId": "track_query",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workspace id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Recorded"
+          },
+          "400": {
+            "description": "Path outside the workspace, or empty query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -639,6 +956,199 @@
           "sensitive",
           "insensitive"
         ]
+      },
+      "ConstraintDto": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ConstraintKind"
+          },
+          {
+            "type": "object",
+            "required": [
+              "negated"
+            ],
+            "properties": {
+              "negated": {
+                "type": "boolean",
+                "description": "True for a negated constraint such as `!tests/`. Nested negation is collapsed, so\n`Not(Not(x))` reports `x` with `negated: false` rather than losing a level."
+              }
+            }
+          }
+        ],
+        "description": "One parsed constraint."
+      },
+      "ConstraintKind": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "value",
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "extension"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "pattern",
+              "type"
+            ],
+            "properties": {
+              "pattern": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "glob"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "values",
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "parts"
+                ]
+              },
+              "values": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "value",
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "text"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "values",
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "exclude"
+                ]
+              },
+              "values": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "segment",
+              "type"
+            ],
+            "properties": {
+              "segment": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "pathSegment"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "path",
+              "type"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "filePath"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "name",
+              "type"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "fileType"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status",
+              "type"
+            ],
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "gitStatus"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "What a constraint constrains, tagged by kind.\n\nDeliberately **not** recursive. The engine models negation as `Not(Box<Constraint>)`, but\nmirroring that here made `ConstraintDto` self-referential, which sent utoipa's schema\ngeneration into infinite recursion and overflowed the stack at startup. Negation is a\nsibling boolean instead — which is also a far easier shape to consume in C# than a\nrecursive union."
       },
       "CreateWorkspace": {
         "type": "object",
@@ -937,6 +1447,20 @@
           }
         },
         "additionalProperties": false
+      },
+      "GitRefreshResponse": {
+        "type": "object",
+        "description": "Result of a git-status refresh.",
+        "required": [
+          "updated"
+        ],
+        "properties": {
+          "updated": {
+            "type": "integer",
+            "description": "Files whose cached status changed.",
+            "minimum": 0
+          }
+        }
       },
       "GitStatus": {
         "type": "object",
@@ -1327,6 +1851,26 @@
           }
         }
       },
+      "HistoryResponse": {
+        "type": "object",
+        "description": "A query from this workspace's history.",
+        "required": [
+          "offset"
+        ],
+        "properties": {
+          "offset": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "query": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`null` when the history is shorter than the requested offset."
+          }
+        }
+      },
       "LineCol": {
         "type": "object",
         "required": [
@@ -1616,6 +2160,85 @@
           }
         },
         "additionalProperties": false
+      },
+      "ParsePreset": {
+        "type": "string",
+        "description": "Which preset to parse with. The presets differ in which constraint kinds they recognise,\nso the same string can mean different things.",
+        "enum": [
+          "fileSearch",
+          "dirSearch",
+          "mixedSearch",
+          "grep",
+          "aiGrep"
+        ]
+      },
+      "ParseQueryRequest": {
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "preset": {
+            "$ref": "#/components/schemas/ParsePreset"
+          },
+          "query": {
+            "type": "string",
+            "example": "git:modified src/**/*.rs !tests/ user controller"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ParseQueryResponse": {
+        "type": "object",
+        "description": "How the parser decomposed a query.\n\nExists because the DSL is powerful and silent about mistakes: a token that looks like a\nglob but is not recognised as one simply becomes fuzzy text, and the results still look\nplausible. This endpoint makes that visible from the client side.",
+        "required": [
+          "query",
+          "constraints",
+          "fuzzyParts",
+          "grepText",
+          "warnings"
+        ],
+        "properties": {
+          "constraints": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConstraintDto"
+            }
+          },
+          "fuzzyParts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The fuzzy terms left after constraints were removed."
+          },
+          "grepText": {
+            "type": "string",
+            "description": "What grep would search for: the query minus constraint tokens."
+          },
+          "location": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LocationDto",
+                "description": "A trailing `file.ts:42:10`, if present."
+              }
+            ]
+          },
+          "query": {
+            "type": "string",
+            "description": "Echoed back, byte-for-byte."
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Problems that would otherwise pass unnoticed."
+          }
+        }
       },
       "Problem": {
         "type": "object",
@@ -1967,6 +2590,57 @@
         },
         "additionalProperties": false
       },
+      "TrackAccessRequest": {
+        "type": "object",
+        "description": "Report that a file was opened, so its access-frecency score rises.\n\nThis is the half of frecency a REST server cannot observe for itself. The modification\nhalf is computed from mtime and git status and works unaided; the access half needs a\nclient to say what was actually opened. A client that never calls this loses nothing\nrelative to running without the databases.",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Repo-relative (forward or back slashes) or absolute. Must resolve inside the\nworkspace root.",
+            "example": "src/main.rs"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TrackAccessResponse": {
+        "type": "object",
+        "required": [
+          "relativePath",
+          "accessCount"
+        ],
+        "properties": {
+          "accessCount": {
+            "type": "integer",
+            "description": "Times this file has been reported, after this call.",
+            "minimum": 0
+          },
+          "relativePath": {
+            "type": "string",
+            "description": "The path as recorded, repo-relative with forward slashes."
+          }
+        }
+      },
+      "TrackQueryRequest": {
+        "type": "object",
+        "description": "Report which result a query led to, feeding the combo boost.\n\nThe boost only fires once the same (query, file) pair has been reported\n`minComboCount` times (default 3), so a single call changes nothing visible.",
+        "required": [
+          "query",
+          "selectedPath"
+        ],
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "selectedPath": {
+            "type": "string",
+            "description": "The file the client acted on. Repo-relative or absolute."
+          }
+        },
+        "additionalProperties": false
+      },
       "Utf16Range": {
         "type": "object",
         "description": "A half-open range of **UTF-16 code units**.\n\nThe engine produces UTF-8 byte offsets. Those are converted here because .NET strings\nare UTF-16: a byte offset would silently address the wrong characters on any line\ncontaining non-ASCII, and the point of this API is that the client does no\npost-processing.",
@@ -2139,6 +2813,10 @@
     {
       "name": "grep",
       "description": "Content search"
+    },
+    {
+      "name": "lifecycle",
+      "description": "Rescan, git refresh, and ranking feedback"
     }
   ]
 }

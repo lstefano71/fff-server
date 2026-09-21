@@ -545,6 +545,20 @@ working with nothing but `rustup` matters more than walk speed on day one.
 Single crate, DTOs in their own module. A separate types crate would serve a hypothetical
 Rust client that is not on the roadmap; promoting the module later is mechanical.
 
+### Parsed constraints are flat, not recursive
+
+`parse-query` reports each constraint as a kind plus a `negated` boolean, rather than
+mirroring the engine's `Not(Box<Constraint>)` as a recursive union.
+
+That started as a bug, not a preference: the recursive DTO sent utoipa's schema generation
+into infinite recursion and the server overflowed its stack on startup. The flat shape is
+also markedly easier to consume from a generated C# client, and nested negation is collapsed
+by toggling the boolean so `Not(Not(x))` is still reported accurately.
+
+Worth noting how it was nearly missed: the crash killed the integration-test binary outright
+rather than failing an assertion, so `cargo test` reported fewer suites instead of a failure.
+Checking the suite's exit code, not just grepping for passes, is what catches that.
+
 ## Licence
 
 The Unlicense - public domain. Note `fff-search` itself is MIT, which is permissive and
@@ -648,5 +662,7 @@ case, since no bits are set.
    offsets, RFC 3339 timestamps; four endpoints verified against `D:/devel/fff`.
 4. ~~Grep routes: cursor pagination, cancellation, time budget.~~ **Done.** Cursor paging
    verified over 196 pages / 5240 matches with zero duplicates and clean termination.
-5. Lifecycle, tracking, `parse-query`.
+5. ~~Lifecycle, tracking, `parse-query`.~~ **Done.** Verified end to end: three
+   `track-access` calls raised `accessFrecencyScore` to 3 and the next search reported
+   `frecencyBoost: 11`, so the cached score really does reach the scorer.
 6. Fixture tests.
