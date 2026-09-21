@@ -4,7 +4,8 @@
     "title": "fff-server",
     "description": "Typed HTTP access to the fff file-search engine.",
     "license": {
-      "name": "MIT"
+      "name": "Unlicense",
+      "identifier": "Unlicense"
     },
     "version": "0.1.0"
   },
@@ -267,6 +268,150 @@
         }
       }
     },
+    "/v1/workspaces/{id}/grep": {
+      "post": {
+        "tags": [
+          "grep"
+        ],
+        "summary": "Content search.",
+        "operationId": "grep",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workspace id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrepRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Matching lines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GrepResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Index not ready yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{id}/multi-grep": {
+      "post": {
+        "tags": [
+          "grep"
+        ],
+        "summary": "Multi-pattern content search.",
+        "operationId": "multi_grep",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workspace id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MultiGrepRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Matching lines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GrepResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No patterns, or a malformed cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Index not ready yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{id}/search": {
       "post": {
         "tags": [
@@ -485,6 +630,15 @@
           }
         },
         "additionalProperties": false
+      },
+      "CasingDto": {
+        "type": "string",
+        "description": "Case handling. 0.11 replaced the old `smart_case` boolean with this; the boolean remains\nonly as a legacy fallback and is not offered here.\n\nUnlike `matchType`, this is a real enum in the engine, so closing it in the contract is\nsafe and gives the C# client a proper enum.",
+        "enum": [
+          "smart",
+          "sensitive",
+          "insensitive"
+        ]
       },
       "CreateWorkspace": {
         "type": "object",
@@ -862,6 +1016,279 @@
         },
         "additionalProperties": false
       },
+      "GrepCursor": {
+        "type": "string",
+        "description": "An opaque continuation token.\n\nIt wraps the engine's file offset, which is a forward-only position in the filtered file\nlist. It is deliberately opaque: there is no way to seek backwards or jump to page N, so\nexposing it as a page number would be a promise the engine cannot keep."
+      },
+      "GrepMatchDto": {
+        "type": "object",
+        "description": "One matching line.",
+        "required": [
+          "fileIndex",
+          "lineNumber",
+          "colUtf16",
+          "byteOffset",
+          "lineContent",
+          "matchRangesUtf16",
+          "isDefinition",
+          "contextBefore",
+          "contextAfter"
+        ],
+        "properties": {
+          "byteOffset": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Byte offset of this line within the file. Stays a byte count, because that is what it\nis for: seeking directly to the line.",
+            "minimum": 0
+          },
+          "colUtf16": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Column of the first match on this line, in **UTF-16 code units** into `lineContent`.",
+            "minimum": 0
+          },
+          "contextAfter": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "contextBefore": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "fileIndex": {
+            "type": "integer",
+            "description": "Index into the response's `files` array. Kept as an index rather than embedding the\nfile, so a file's metadata is not repeated across hundreds of matches within it.",
+            "minimum": 0
+          },
+          "fuzzyScore": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Only present in fuzzy mode.",
+            "minimum": 0
+          },
+          "isDefinition": {
+            "type": "boolean",
+            "description": "Only meaningful when `classifyDefinitions` was requested."
+          },
+          "lineContent": {
+            "type": "string"
+          },
+          "lineNumber": {
+            "type": "integer",
+            "format": "int64",
+            "description": "1-based.",
+            "minimum": 0
+          },
+          "matchRangesUtf16": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Utf16Range"
+            },
+            "description": "Every match on this line, in UTF-16 code units into `lineContent`. The MCP server\nuses these only to centre its truncation window and never emits them."
+          }
+        }
+      },
+      "GrepModeDto": {
+        "type": "string",
+        "description": "How to interpret the pattern.",
+        "enum": [
+          "plain",
+          "regex",
+          "fuzzy",
+          "auto"
+        ]
+      },
+      "GrepPreset": {
+        "type": "string",
+        "description": "Which parser preset to read constraint tokens with.",
+        "enum": [
+          "grep",
+          "aiGrep"
+        ]
+      },
+      "GrepRequest": {
+        "type": "object",
+        "description": "Content search request.",
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "afterContext": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "beforeContext": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "casing": {
+            "$ref": "#/components/schemas/CasingDto"
+          },
+          "classifyDefinitions": {
+            "type": "boolean",
+            "description": "Tags lines that look like definitions. Roughly 2% overhead."
+          },
+          "cursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GrepCursor",
+                "description": "Continuation token from a previous response's `nextCursor`."
+              }
+            ]
+          },
+          "enforceTimeBudget": {
+            "type": "boolean",
+            "description": "Apply the budget even before anything has matched. Off by default, matching the\nengine: a zero-match query otherwise scans everything."
+          },
+          "maxFileSize": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "maxMatchesPerFile": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "mode": {
+            "$ref": "#/components/schemas/GrepModeDto"
+          },
+          "pageSize": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Soft cap on matches per response; the engine finishes the file it is in.",
+            "minimum": 0
+          },
+          "preset": {
+            "$ref": "#/components/schemas/GrepPreset"
+          },
+          "query": {
+            "type": "string",
+            "description": "Pattern plus optional constraint tokens, e.g. `*.rs !tests/ TODO`. Passed to the\nengine byte-for-byte: backslashes are **not** folded, because a backslash is\nlegitimate content in a pattern.",
+            "example": "*.rs TODO"
+          },
+          "timeBudgetMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Milliseconds before returning partial results. 0, the default, means unbounded.\nGrep over SMB measured ~7 ms/file, so a full 87k-file tree is around ten minutes: a\nbudget here is a real safeguard, but one that silently truncates, which is why\ncursor paging is the better tool.",
+            "minimum": 0
+          },
+          "trimWhitespace": {
+            "type": "boolean",
+            "description": "Strips leading whitespace from matched and context lines, adjusting the reported\noffsets accordingly."
+          }
+        },
+        "additionalProperties": false
+      },
+      "GrepResponse": {
+        "type": "object",
+        "required": [
+          "matches",
+          "files",
+          "totalMatched",
+          "totalFilesSearched",
+          "totalFiles",
+          "filteredFileCount",
+          "filesWithMatches",
+          "literalFallback",
+          "mode",
+          "aborted"
+        ],
+        "properties": {
+          "aborted": {
+            "type": "boolean",
+            "description": "True when the engine's abort signal was tripped, which currently means the client\ndisconnected mid-search. Results are partial.\n\nNote this does **not** cover a `timeBudgetMs` truncation: the engine reports that by\nreturning early with a non-null `nextCursor` and no separate flag, so a client that\ncares about completeness should page until `nextCursor` is null rather than trust\nthis field alone."
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileItemDto"
+            },
+            "description": "Deduplicated files referenced by `matches[].fileIndex`."
+          },
+          "filesWithMatches": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "filteredFileCount": {
+            "type": "integer",
+            "description": "Files eligible after filtering out binaries, oversized files and constraint misses.",
+            "minimum": 0
+          },
+          "literalFallback": {
+            "type": "boolean",
+            "description": "True when a constrained query found nothing and the engine retried the whole raw\nquery as literal text, ignoring the constraints it had inferred."
+          },
+          "matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GrepMatchDto"
+            }
+          },
+          "mode": {
+            "type": "string",
+            "description": "The mode actually used, after `auto` resolution."
+          },
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GrepCursor",
+                "description": "Pass back as `cursor` for the next page. `null` means the search is exhausted."
+              }
+            ]
+          },
+          "regexFallbackError": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set when a regex failed to compile and the search fell back to literal matching.\nThe request still succeeds; this explains why the results look literal."
+          },
+          "totalFiles": {
+            "type": "integer",
+            "description": "Files in the index.",
+            "minimum": 0
+          },
+          "totalFilesSearched": {
+            "type": "integer",
+            "description": "Files actually searched in this call.",
+            "minimum": 0
+          },
+          "totalMatched": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
       "Health": {
         "type": "object",
         "description": "Server liveness and, once the pool exists, per-workspace readiness.",
@@ -1094,6 +1521,101 @@
             }
           }
         }
+      },
+      "MultiGrepRequest": {
+        "type": "object",
+        "description": "Multi-pattern search: any pattern matching counts, via SIMD Aho-Corasick. Faster than\nregex alternation and much faster than N separate searches. Always literal text.",
+        "required": [
+          "patterns"
+        ],
+        "properties": {
+          "afterContext": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "beforeContext": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "casing": {
+            "$ref": "#/components/schemas/CasingDto"
+          },
+          "classifyDefinitions": {
+            "type": "boolean"
+          },
+          "constraints": {
+            "type": "string",
+            "description": "Constraint tokens only — no pattern text. e.g. `*.rs !tests/`."
+          },
+          "cursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GrepCursor"
+              }
+            ]
+          },
+          "enforceTimeBudget": {
+            "type": "boolean"
+          },
+          "maxFileSize": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "maxMatchesPerFile": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "patterns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "At least one literal pattern.",
+            "example": [
+              "TODO",
+              "FIXME",
+              "XXX"
+            ]
+          },
+          "preset": {
+            "$ref": "#/components/schemas/GrepPreset"
+          },
+          "timeBudgetMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "trimWhitespace": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
       },
       "Problem": {
         "type": "object",
@@ -1613,6 +2135,10 @@
     {
       "name": "search",
       "description": "Fuzzy path search and glob matching"
+    },
+    {
+      "name": "grep",
+      "description": "Content search"
     }
   ]
 }

@@ -312,6 +312,31 @@ mod tests {
     }
 
     #[test]
+    fn regression_real_engine_offsets_from_a_line_with_an_em_dash() {
+        // Captured from the engine itself, grepping this repo's DESIGN.md for "contrary".
+        // The engine reported match_byte_offsets (43, 51) on this line; slicing the line by
+        // those BYTE offsets yields "contrary", while the correct UTF-16 indices are
+        // (41, 49). A client indexing lineContent by the raw byte offsets would highlight
+        // "d contra" instead - which is exactly what a mis-decoded test harness showed
+        // before this was pinned down.
+        let line = "*not* simplify UNC paths \u{2014} measured, and contrary to what an earlier draft of this document";
+        assert_eq!(line.len(), 93, "bytes");
+        assert_eq!(line.chars().count(), 91, "chars");
+        assert_eq!(
+            &line[43..51],
+            "contrary",
+            "engine byte offsets are genuine UTF-8"
+        );
+
+        let r = utf16_ranges(line, &[(43, 51)]);
+        assert_eq!((r[0].start, r[0].end), (41, 49));
+
+        let units: Vec<u16> = line.encode_utf16().collect();
+        let picked = String::from_utf16(&units[r[0].start as usize..r[0].end as usize]).unwrap();
+        assert_eq!(picked, "contrary");
+    }
+
+    #[test]
     fn astral_plane_counts_as_two_utf16_units() {
         let text = "a😀b";
         // 'b' starts at byte 5, UTF-16 index 3 (a=1, emoji=2 units).

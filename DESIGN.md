@@ -135,7 +135,7 @@ FileItem
   relativePath   string     forward slashes, on-disk casing
   fileName       string
   directory      string     trailing '/', "" at root
-  absolutePath   string     native backslashes
+  absolutePath   string     native separators, no \\?\ prefix
   size           int64
   modified       date-time  RFC 3339 UTC
   isBinary       bool
@@ -143,7 +143,7 @@ FileItem
   modificationFrecencyScore  int
   gitRecencyScore            int
   totalFrecencyScore         int    access + modification only, NOT git recency
-  gitStatus      { status: string|null, flags: string[] }
+  gitStatus      { status: string, flags: string[] }   "clean" when no bits set
 
 Score
   total, baseScore, filenameBonus, specialFilenameBonus, frecencyBoost,
@@ -220,10 +220,13 @@ So:
 
 - `relativePath` is forward-slash form, as fff stores it. It is what a client matches,
   globs, and displays.
-- `absolutePath` is fully native, built via **`write_absolute_path`**, never
-  `FileItem::absolute_path` — the latter returns mixed separators on Windows (confirmed
-  live: `D:\devel\fff-server\spike/unc-probe/Cargo.toml`), which Win32 accepts for I/O but
-  which is byte-equal to nothing the OS or git will hand back.
+- `absolutePath` is fully native, and is **built by this server** from the presented root
+  plus the `/`-canonical relative path, nativising separators. Not via
+  `FileItem::absolute_path`, which returns mixed separators on Windows (confirmed live:
+  `D:\devel\fff-server\spike/unc-probe/Cargo.toml`) - Win32 accepts that for I/O but it is
+  byte-equal to nothing the OS or git will hand back. An earlier draft said to use the
+  engine's `write_absolute_path`; that is `pub(crate)` in 0.11 and unreachable from outside
+  the crate. Building it here is no worse and yields the unprefixed form anyway.
 - `absolutePath` is also **stripped of any verbatim prefix** for presentation:
   `\\?\UNC\server\share\x` is emitted as `\\server\share\x`, and `\\?\D:\x` as `D:\x`.
   Share-backed workspaces always have a verbatim base path (see Workspace identity), and
@@ -298,7 +301,11 @@ Searches are synchronous CPU-bound Rust that fan out internally across fff's
 `spawn_blocking` with a lowered blocking-pool cap.
 
 Both grep routes wire `GrepSearchOptions::abort_signal` to client disconnect, so a cancelled
-`HttpClient` request actually stops the work. Note the asymmetry: **grep has `abort_signal`,
+`HttpClient` request actually stops the work. `spawn_blocking` cannot be cancelled by
+dropping its handle, so the flag is tripped by a guard whose `Drop` runs when axum drops the
+handler future. The response's `aborted` field reflects **only** that signal: a
+`timeBudgetMs` truncation is reported by a non-null `nextCursor` and no flag, so a client
+that needs completeness should page until the cursor is null. Note the asymmetry: **grep has `abort_signal`,
 fuzzy search does not**, so a search request runs to completion regardless. A default
 `time_budget_ms` bounds grep as the only other lever.
 
@@ -538,6 +545,11 @@ working with nothing but `rustup` matters more than walk speed on day one.
 Single crate, DTOs in their own module. A separate types crate would serve a hypothetical
 Rust client that is not on the roadmap; promoting the module later is mechanical.
 
+## Licence
+
+The Unlicense - public domain. Note `fff-search` itself is MIT, which is permissive and
+imposes no obligation on this server beyond the usual attribution for the dependency.
+
 ## Known risks
 
 - **git on a UNC root is untested.** Share-backed workspaces always carry a verbatim
@@ -612,8 +624,11 @@ Two corrections this produced: `abort_signal` is coarse-grained (8 files still s
 the flag was set), so cancellation is prompt rather than immediate; and the three readiness
 stages are distinct, which is why workspace creation exposes all three.
 
-`git_status` comes back `None` for clean files rather than an empty status — the convenience
-`status` string is therefore `null` for clean files, not `"clean"`.
+`git_status` comes back `None` from the engine for a clean file rather than an empty status
+value. The convenience `status` string is nonetheless `"clean"`, not null: it is produced by
+the engine's own `format_git_status_opt`, which maps `None` to `"clean"`, so this server
+keeps the same vocabulary as every other fff binding. The `flags` array is empty in that
+case, since no bits are set.
 
 ## Build order
 
@@ -629,7 +644,9 @@ stages are distinct, which is why workspace creation exposes all three.
    single-instance guard.~~ **Done.** Verified end to end: `D:/DEVEL/FFF-SERVER/` and
    `D:/devel/fff-server` resolve to one workspace id; a second instance over one `db_root`
    is refused; eviction stops the watcher and git worker cleanly.
-3. Search routes and DTOs.
-4. Grep routes: cursor pagination, cancellation, time budget.
+3. ~~Search routes and DTOs.~~ **Done.** All 13 score fields, git-status flags, UTF-16
+   offsets, RFC 3339 timestamps; four endpoints verified against `D:/devel/fff`.
+4. ~~Grep routes: cursor pagination, cancellation, time budget.~~ **Done.** Cursor paging
+   verified over 196 pages / 5240 matches with zero duplicates and clean termination.
 5. Lifecycle, tracking, `parse-query`.
 6. Fixture tests.

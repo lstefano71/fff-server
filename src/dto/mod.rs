@@ -3,5 +3,6 @@
 //! carries descriptions a generated client can read.
 
 pub mod file;
+pub mod grep;
 pub mod search;
 pub mod workspace;

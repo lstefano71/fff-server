@@ -2,6 +2,9 @@
 name = "fff-server"
 version = "0.1.0"
 edition = "2024"
+license = "Unlicense"
+description = "Typed HTTP access to the fff file-search engine"
+repository = "https://github.com/lstefano71/fff-server"
 
 [dependencies]
 axum = "0.8.9"

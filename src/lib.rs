@@ -37,13 +37,14 @@ const SWEEP_INTERVAL: Duration = Duration::from_secs(30);
     info(
         title = "fff-server",
         description = "Typed HTTP access to the fff file-search engine.",
-        license(name = "MIT"),
+        license(name = "Unlicense", identifier = "Unlicense"),
     ),
     components(schemas(crate::error::Problem)),
     tags(
         (name = "meta", description = "Server health and contract"),
         (name = "workspaces", description = "Indexed roots and their lifecycle"),
         (name = "search", description = "Fuzzy path search and glob matching"),
+        (name = "grep", description = "Content search"),
     ),
 )]
 pub struct ApiDoc;
@@ -63,6 +64,8 @@ pub fn build(config: Config) -> (Router, utoipa::openapi::OpenApi, AppState) {
         .routes(routes!(routes::search::search_directories))
         .routes(routes!(routes::search::search_mixed))
         .routes(routes!(routes::search::glob))
+        .routes(routes!(routes::grep::grep))
+        .routes(routes!(routes::grep::multi_grep))
         .with_state(state.clone())
         .split_for_parts();
 
