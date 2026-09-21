@@ -52,10 +52,9 @@ that needs no post-processing, the client wins. That is the point of the project
 | `GET` | `/v1/workspaces/{id}` | Status: scan progress, git root, `isNetworkPath`, `lastScanAt`, config echo |
 | `DELETE` | `/v1/workspaces/{id}` | Evict now, releasing memory and LMDB handles |
 
-`POST /v1/workspaces` blocks until the initial scan completes, up to
-`default_wait_for_index_ms` (30 s), then returns with the workspace marked still-indexing
-rather than failing. It doubles as the warm-up call: a client that knows its roots can index
-them at startup and never hit the cold path.
+`POST /v1/workspaces` doubles as the warm-up call: a client that knows its roots can index
+them at startup and never hit a cold path later. It is idempotent — an existing workspace is
+returned rather than rebuilt.
 
 Readiness has **three** stages, and they are not simultaneous (measured, see Verified
 below): `wait_for_scan` means files are searchable; `wait_for_indexing_complete` means the
