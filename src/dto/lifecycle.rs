@@ -87,36 +87,54 @@ pub struct ParseQueryRequest {
     pub preset: ParsePreset,
 }
 
-/// What a constraint constrains, tagged by kind.
-///
-/// Deliberately **not** recursive. The engine models negation as `Not(Box<Constraint>)`, but
-/// mirroring that here made `ConstraintDto` self-referential, which sent utoipa's schema
-/// generation into infinite recursion and overflowed the stack at startup. Negation is a
-/// sibling boolean instead — which is also a far easier shape to consume in C# than a
-/// recursive union.
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum ConstraintKind {
-    Extension { value: String },
-    Glob { pattern: String },
-    Parts { values: Vec<String> },
-    Text { value: String },
-    Exclude { values: Vec<String> },
-    PathSegment { segment: String },
-    FilePath { path: String },
-    FileType { name: String },
-    GitStatus { status: &'static str },
+/// What kind of thing a constraint constrains.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum ConstraintType {
+    /// `value` holds the extension, without a dot.
+    Extension,
+    /// `value` holds the glob pattern.
+    Glob,
+    /// `values` holds the text parts.
+    Parts,
+    /// `value` holds the literal text.
+    Text,
+    /// `values` holds the excluded terms.
+    Exclude,
+    /// `value` holds the path segment.
+    PathSegment,
+    /// `value` holds the repo-relative file path.
+    FilePath,
+    /// `value` holds the engine's file-type name.
+    FileType,
+    /// `value` is one of `modified`, `untracked`, `staged`, `unmodified`.
+    GitStatus,
 }
 
-/// One parsed constraint.
+/// One parsed constraint. `type` says which field carries the payload.
+//
+// Flat rather than a discriminated union, for two reasons found the hard way. Mirroring
+// the engine's `Not(Box<Constraint>)` made this type recursive, which sent utoipa's schema
+// generation into infinite recursion and overflowed the stack at startup. Replacing that
+// with a `oneOf` plus a flattened sibling field then produced a schema Kiota refuses to
+// generate from at all: an `allOf` over an anonymous `oneOf`, with no discriminator and no
+// named variants to map one to. See DESIGN.md.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ConstraintDto {
-    #[serde(flatten)]
-    pub kind: ConstraintKind,
+    #[serde(rename = "type")]
+    #[schema(rename = "type")]
+    pub constraint_type: ConstraintType,
     /// True for a negated constraint such as `!tests/`. Nested negation is collapsed, so
-    /// `Not(Not(x))` reports `x` with `negated: false` rather than losing a level.
+    /// `Not(Not(x))` reports the inner constraint with `negated: false` rather than losing a
+    /// level.
     pub negated: bool,
+    /// The single-valued payload, for every type except `parts` and `exclude`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    /// The multi-valued payload, for `parts` and `exclude`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub values: Vec<String>,
 }
 
 impl ConstraintDto {
@@ -130,47 +148,41 @@ impl ConstraintDto {
             current = inner;
         }
 
-        let kind = match current {
-            Constraint::Extension(v) => ConstraintKind::Extension {
-                value: (*v).to_owned(),
-            },
-            Constraint::Glob(p) => ConstraintKind::Glob {
-                pattern: (*p).to_owned(),
-            },
-            Constraint::Parts(vs) => ConstraintKind::Parts {
-                values: vs.iter().map(|v| (*v).to_owned()).collect(),
-            },
-            Constraint::Text(v) => ConstraintKind::Text {
-                value: (*v).to_owned(),
-            },
-            Constraint::Exclude(vs) => ConstraintKind::Exclude {
-                values: vs.iter().map(|v| (*v).to_owned()).collect(),
-            },
-            Constraint::PathSegment(s) => ConstraintKind::PathSegment {
-                segment: (*s).to_owned(),
-            },
-            Constraint::FilePath(p) => ConstraintKind::FilePath {
-                path: (*p).to_owned(),
-            },
-            Constraint::FileType(n) => ConstraintKind::FileType {
-                name: (*n).to_owned(),
-            },
-            Constraint::GitStatus(g) => ConstraintKind::GitStatus {
-                status: match g {
+        let single = |t: ConstraintType, v: &str| Self {
+            constraint_type: t,
+            negated,
+            value: Some(v.to_owned()),
+            values: Vec::new(),
+        };
+        let multi = |t: ConstraintType, vs: &[&str]| Self {
+            constraint_type: t,
+            negated,
+            value: None,
+            values: vs.iter().map(|v| (*v).to_owned()).collect(),
+        };
+
+        match current {
+            Constraint::Extension(v) => single(ConstraintType::Extension, v),
+            Constraint::Glob(p) => single(ConstraintType::Glob, p),
+            Constraint::Parts(vs) => multi(ConstraintType::Parts, vs),
+            Constraint::Text(v) => single(ConstraintType::Text, v),
+            Constraint::Exclude(vs) => multi(ConstraintType::Exclude, vs),
+            Constraint::PathSegment(s) => single(ConstraintType::PathSegment, s),
+            Constraint::FilePath(p) => single(ConstraintType::FilePath, p),
+            Constraint::FileType(n) => single(ConstraintType::FileType, n),
+            Constraint::GitStatus(g) => single(
+                ConstraintType::GitStatus,
+                match g {
                     GitStatusFilter::Modified => "modified",
                     GitStatusFilter::Untracked => "untracked",
                     GitStatusFilter::Staged => "staged",
                     GitStatusFilter::Unmodified => "unmodified",
                 },
-            },
+            ),
             // Unreachable: every Not was unwrapped above. Represented rather than panicking,
             // because Constraint is an external type that may gain variants.
-            Constraint::Not(_) => ConstraintKind::Text {
-                value: String::new(),
-            },
-        };
-
-        Self { kind, negated }
+            Constraint::Not(_) => single(ConstraintType::Text, ""),
+        }
     }
 }
 

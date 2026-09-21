@@ -68,12 +68,50 @@ pub struct DirHit {
     pub score: ScoreDto,
 }
 
-/// A hit from a mixed search, tagged by kind.
+/// Whether a mixed hit is a file or a directory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum MixedKind {
+    File,
+    Directory,
+}
+
+/// A hit from a mixed search. Exactly one of `file` and `directory` is populated, indicated
+/// by `type`.
+//
+// Flat rather than a discriminated union: utoipa renders one as a `oneOf` with no
+// discriminator, which generators reject or mis-deserialise. See DESIGN.md.
 #[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum MixedHit {
-    File { item: FileItemDto, score: ScoreDto },
-    Directory { item: DirItemDto, score: ScoreDto },
+#[serde(rename_all = "camelCase")]
+pub struct MixedHit {
+    #[serde(rename = "type")]
+    #[schema(rename = "type")]
+    pub kind: MixedKind,
+    pub score: ScoreDto,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file: Option<FileItemDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub directory: Option<DirItemDto>,
+}
+
+impl MixedHit {
+    pub fn file(item: FileItemDto, score: ScoreDto) -> Self {
+        Self {
+            kind: MixedKind::File,
+            score,
+            file: Some(item),
+            directory: None,
+        }
+    }
+
+    pub fn directory(item: DirItemDto, score: ScoreDto) -> Self {
+        Self {
+            kind: MixedKind::Directory,
+            score,
+            file: None,
+            directory: Some(item),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]

@@ -87,6 +87,10 @@ pub enum GrepPreset {
 /// exposing it as a page number would be a promise the engine cannot keep.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(transparent)]
+// Declared as a plain string in the contract. Without this utoipa emits a wrapper schema
+// that Kiota misreads as a polymorphic type ("Discriminator GrepCursor is not inherited
+// from GrepCursor").
+#[schema(value_type = String, example = "NTQ0")]
 pub struct GrepCursor(String);
 
 impl GrepCursor {
@@ -168,6 +172,7 @@ pub struct GrepRequest {
     pub preset: GrepPreset,
 
     /// Continuation token from a previous response's `nextCursor`.
+    #[schema(value_type = Option<String>)]
     pub cursor: Option<GrepCursor>,
     /// Soft cap on matches per response; the engine finishes the file it is in.
     pub page_size: Option<usize>,
@@ -211,6 +216,7 @@ pub struct MultiGrepRequest {
     #[serde(default)]
     pub preset: GrepPreset,
 
+    #[schema(value_type = Option<String>)]
     pub cursor: Option<GrepCursor>,
     pub page_size: Option<usize>,
     pub max_file_size: Option<u64>,
@@ -269,6 +275,7 @@ pub struct GrepResponse {
     pub files_with_matches: usize,
 
     /// Pass back as `cursor` for the next page. `null` means the search is exhausted.
+    #[schema(value_type = Option<String>)]
     pub next_cursor: Option<GrepCursor>,
     /// Set when a regex failed to compile and the search fell back to literal matching.
     /// The request still succeeds; this explains why the results look literal.

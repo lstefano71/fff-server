@@ -39,6 +39,10 @@ const SWEEP_INTERVAL: Duration = Duration::from_secs(30);
         description = "Typed HTTP access to the fff file-search engine.",
         license(name = "Unlicense", identifier = "Unlicense"),
     ),
+    // An absolute default, because code generators reject a relative server url and then
+    // demand the base address be wired up by hand. The bind address is configurable, so a
+    // client pointed elsewhere simply overrides this.
+    servers((url = "http://localhost:8080", description = "Default local bind")),
     components(schemas(crate::error::Problem)),
     tags(
         (name = "meta", description = "Server health and contract"),

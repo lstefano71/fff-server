@@ -63,3 +63,53 @@ fn problem_schema_is_published_for_clients() {
         "RFC 9457 Problem must be in the contract so clients can deserialise errors"
     );
 }
+
+/// The shapes that broke C# generation, pinned so they cannot creep back.
+///
+/// utoipa renders a serde-tagged Rust enum as a `oneOf` of inline variants with no
+/// discriminator. Kiota treats any `oneOf` as polymorphic and requires a discriminator whose
+/// mapping points at named schemas, so it warned on three of ours and refused outright on the
+/// one that was also wrapped in an `allOf`. These three are now flat objects with a closed
+/// `type` enum instead.
+#[test]
+fn schemas_that_broke_codegen_stay_flat() {
+    let doc = fff_server::openapi_document();
+    let json = serde_json::to_value(&doc).expect("serialise");
+    let schemas = &json["components"]["schemas"];
+
+    for name in ["ConstraintDto", "LocationDto", "MixedHit"] {
+        let schema = &schemas[name];
+        assert!(
+            !schema.as_object().unwrap().contains_key("oneOf"),
+            "{name} became a oneOf again; C# generation fails or mis-deserialises on those"
+        );
+        assert!(
+            !schema.as_object().unwrap().contains_key("allOf"),
+            "{name} became an allOf again; Kiota cannot merge one over an anonymous oneOf"
+        );
+        assert_eq!(
+            schema["type"].as_str(),
+            Some("object"),
+            "{name} should be a plain object"
+        );
+        assert!(
+            schema["properties"]["type"].is_object(),
+            "{name} needs its `type` discriminant as an ordinary property"
+        );
+    }
+}
+
+/// Generators reject a relative server url and then require the base address be wired by
+/// hand, which is a papercut for every consumer.
+#[test]
+fn contract_declares_an_absolute_server_url() {
+    let doc = fff_server::openapi_document();
+    let json = serde_json::to_value(&doc).expect("serialise");
+    let url = json["servers"][0]["url"]
+        .as_str()
+        .expect("a servers entry is required");
+    assert!(
+        url.starts_with("http://") || url.starts_with("https://"),
+        "server url must be absolute, got {url:?}"
+    );
+}

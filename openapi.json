@@ -9,6 +9,12 @@
     },
     "version": "0.1.0"
   },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Default local bind"
+    }
+  ],
   "paths": {
     "/v1/health": {
       "get": {
@@ -958,197 +964,50 @@
         ]
       },
       "ConstraintDto": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/ConstraintKind"
-          },
-          {
-            "type": "object",
-            "required": [
-              "negated"
-            ],
-            "properties": {
-              "negated": {
-                "type": "boolean",
-                "description": "True for a negated constraint such as `!tests/`. Nested negation is collapsed, so\n`Not(Not(x))` reports `x` with `negated: false` rather than losing a level."
-              }
-            }
-          }
+        "type": "object",
+        "description": "One parsed constraint. `type` says which field carries the payload.",
+        "required": [
+          "type",
+          "negated"
         ],
-        "description": "One parsed constraint."
+        "properties": {
+          "negated": {
+            "type": "boolean",
+            "description": "True for a negated constraint such as `!tests/`. Nested negation is collapsed, so\n`Not(Not(x))` reports the inner constraint with `negated: false` rather than losing a\nlevel."
+          },
+          "type": {
+            "$ref": "#/components/schemas/ConstraintType"
+          },
+          "value": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The single-valued payload, for every type except `parts` and `exclude`."
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The multi-valued payload, for `parts` and `exclude`."
+          }
+        }
       },
-      "ConstraintKind": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "value",
-              "type"
-            ],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
-                  "extension"
-                ]
-              },
-              "value": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "pattern",
-              "type"
-            ],
-            "properties": {
-              "pattern": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "glob"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "values",
-              "type"
-            ],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
-                  "parts"
-                ]
-              },
-              "values": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "value",
-              "type"
-            ],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
-                  "text"
-                ]
-              },
-              "value": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "values",
-              "type"
-            ],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
-                  "exclude"
-                ]
-              },
-              "values": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "segment",
-              "type"
-            ],
-            "properties": {
-              "segment": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "pathSegment"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "path",
-              "type"
-            ],
-            "properties": {
-              "path": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "filePath"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "name",
-              "type"
-            ],
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "fileType"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "status",
-              "type"
-            ],
-            "properties": {
-              "status": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "gitStatus"
-                ]
-              }
-            }
-          }
-        ],
-        "description": "What a constraint constrains, tagged by kind.\n\nDeliberately **not** recursive. The engine models negation as `Not(Box<Constraint>)`, but\nmirroring that here made `ConstraintDto` self-referential, which sent utoipa's schema\ngeneration into infinite recursion and overflowed the stack at startup. Negation is a\nsibling boolean instead — which is also a far easier shape to consume in C# than a\nrecursive union."
+      "ConstraintType": {
+        "type": "string",
+        "description": "What kind of thing a constraint constrains.",
+        "enum": [
+          "extension",
+          "glob",
+          "parts",
+          "text",
+          "exclude",
+          "pathSegment",
+          "filePath",
+          "fileType",
+          "gitStatus"
+        ]
       },
       "CreateWorkspace": {
         "type": "object",
@@ -1540,10 +1399,6 @@
         },
         "additionalProperties": false
       },
-      "GrepCursor": {
-        "type": "string",
-        "description": "An opaque continuation token.\n\nIt wraps the engine's file offset, which is a forward-only position in the filtered file\nlist. It is deliberately opaque: there is no way to seek backwards or jump to page N, so\nexposing it as a page number would be a promise the engine cannot keep."
-      },
       "GrepMatchDto": {
         "type": "object",
         "description": "One matching line.",
@@ -1666,15 +1521,11 @@
             "description": "Tags lines that look like definitions. Roughly 2% overhead."
           },
           "cursor": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/GrepCursor",
-                "description": "Continuation token from a previous response's `nextCursor`."
-              }
-            ]
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Continuation token from a previous response's `nextCursor`."
           },
           "enforceTimeBudget": {
             "type": "boolean",
@@ -1780,15 +1631,11 @@
             "description": "The mode actually used, after `auto` resolution."
           },
           "nextCursor": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/GrepCursor",
-                "description": "Pass back as `cursor` for the next page. `null` means the search is exhausted."
-              }
-            ]
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass back as `cursor` for the next page. `null` means the search is exhausted."
           },
           "regexFallbackError": {
             "type": [
@@ -1871,141 +1718,99 @@
           }
         }
       },
-      "LineCol": {
+      "LocationDto": {
         "type": "object",
+        "description": "A `file.ts:42:10` suffix parsed out of the query. `line` is always present; `col`,\n`endLine` and `endCol` depend on `type`.",
         "required": [
-          "line",
-          "col"
+          "type",
+          "line"
         ],
         "properties": {
           "col": {
-            "type": "integer",
-            "format": "int32"
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Present for `position` and `range`."
+          },
+          "endCol": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Present for `range` only."
+          },
+          "endLine": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Present for `range` only."
           },
           "line": {
             "type": "integer",
             "format": "int32"
+          },
+          "type": {
+            "$ref": "#/components/schemas/LocationType"
           }
         }
       },
-      "LocationDto": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "line",
-              "type"
-            ],
-            "properties": {
-              "line": {
-                "type": "integer",
-                "format": "int32"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "line"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "line",
-              "col",
-              "type"
-            ],
-            "properties": {
-              "col": {
-                "type": "integer",
-                "format": "int32"
-              },
-              "line": {
-                "type": "integer",
-                "format": "int32"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "position"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "start",
-              "end",
-              "type"
-            ],
-            "properties": {
-              "end": {
-                "$ref": "#/components/schemas/LineCol"
-              },
-              "start": {
-                "$ref": "#/components/schemas/LineCol"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "range"
-                ]
-              }
-            }
-          }
-        ],
-        "description": "A `file.ts:42:10` suffix parsed out of the query. The MCP server discards this entirely."
+      "LocationType": {
+        "type": "string",
+        "description": "Which parts of a location the query specified.",
+        "enum": [
+          "line",
+          "position",
+          "range"
+        ]
       },
       "MixedHit": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "item",
-              "score",
-              "type"
-            ],
-            "properties": {
-              "item": {
-                "$ref": "#/components/schemas/FileItemDto"
-              },
-              "score": {
-                "$ref": "#/components/schemas/ScoreDto"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "file"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "item",
-              "score",
-              "type"
-            ],
-            "properties": {
-              "item": {
-                "$ref": "#/components/schemas/DirItemDto"
-              },
-              "score": {
-                "$ref": "#/components/schemas/ScoreDto"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "directory"
-                ]
-              }
-            }
-          }
+        "type": "object",
+        "description": "A hit from a mixed search. Exactly one of `file` and `directory` is populated, indicated\nby `type`.",
+        "required": [
+          "type",
+          "score"
         ],
-        "description": "A hit from a mixed search, tagged by kind."
+        "properties": {
+          "directory": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DirItemDto"
+              }
+            ]
+          },
+          "file": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FileItemDto"
+              }
+            ]
+          },
+          "score": {
+            "$ref": "#/components/schemas/ScoreDto"
+          },
+          "type": {
+            "$ref": "#/components/schemas/MixedKind"
+          }
+        }
+      },
+      "MixedKind": {
+        "type": "string",
+        "description": "Whether a mixed hit is a file or a directory.",
+        "enum": [
+          "file",
+          "directory"
+        ]
       },
       "MixedSearchResponse": {
         "type": "object",
@@ -2098,13 +1903,9 @@
             "description": "Constraint tokens only — no pattern text. e.g. `*.rs !tests/`."
           },
           "cursor": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/GrepCursor"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           },
           "enforceTimeBudget": {

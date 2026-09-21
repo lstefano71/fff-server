@@ -274,14 +274,12 @@ pub async fn search_mixed(
             .map(|(i, item)| {
                 let score = ScoreDto::from(&result.scores[i]);
                 match item {
-                    fff_search::types::MixedItemRef::File(f) => MixedHit::File {
-                        item: FileItemDto::build(f, picker, &display),
-                        score,
-                    },
-                    fff_search::types::MixedItemRef::Dir(d) => MixedHit::Directory {
-                        item: DirItemDto::build(d, picker, &display),
-                        score,
-                    },
+                    fff_search::types::MixedItemRef::File(f) => {
+                        MixedHit::file(FileItemDto::build(f, picker, &display), score)
+                    }
+                    fff_search::types::MixedItemRef::Dir(d) => {
+                        MixedHit::directory(DirItemDto::build(d, picker, &display), score)
+                    }
                 }
             })
             .collect::<Vec<_>>();

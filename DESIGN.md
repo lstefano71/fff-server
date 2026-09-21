@@ -511,6 +511,38 @@ settings, and naming conventions are already decided — a client generated here
 guesses about all three. [Kiota](https://learn.microsoft.com/openapi/kiota/) is suggested for
 modern .NET: cleaner `HttpClient`-based output, no Newtonsoft dependency.
 
+### Generator constraints the contract has to respect
+
+Verified by actually running `kiota generate` and compiling the output, not by assuming.
+Three findings, all of which changed the wire shapes:
+
+**No `oneOf` for our own unions.** utoipa renders a serde-tagged Rust enum as a `oneOf` of
+*inline* variants with no `discriminator`. Kiota treats any `oneOf` as polymorphic and wants a
+discriminator whose mapping points at *named* schemas, so it cannot be satisfied by adding one
+either. It warned on `LocationDto` and `MixedHit`, and refused outright on `ConstraintDto`,
+which was additionally wrapped in an `allOf` (`The type does not contain any information`).
+
+All three are now flat objects with a closed `type` enum and optional payload fields. That
+generates idiomatic C# - a real enum plus nullable properties - and a working client beats an
+elegant shape no client can consume. A test pins the three schemas as flat.
+
+**An opaque token should be declared as a string.** `Option<GrepCursor>` rendered as
+`oneOf: [null, $ref]`, which Kiota read as polymorphism (`Discriminator GrepCursor is not
+inherited from GrepCursor`). The cursor fields now declare `value_type = Option<String>`;
+`GrepCursor` stays a newtype in Rust, while the contract says what it is on the wire.
+
+Note nullable *object* references still render as `oneOf: [null, $ref]` and Kiota handles
+those silently, so this is specifically about scalars behind a `$ref`.
+
+**The server url must be absolute.** A relative `/` entry is valid OpenAPI but Kiota ignores
+it and reports no server url, leaving the base address to be wired up by hand. The contract
+declares `http://localhost:8080`, which a client pointed elsewhere simply overrides.
+
+**Implementation rationale stays out of `///` doc comments** on wire types, because utoipa
+puts those in the schema `description` and Kiota puts the description in the generated
+IntelliSense. Notes about utoipa and Kiota belong in this document, not in a consumer's
+tooltip.
+
 An `openapi.json` snapshot test fails CI on any unintended contract change, so a contract
 change is always a reviewed event rather than a runtime surprise downstream.
 

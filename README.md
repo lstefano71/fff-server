@@ -84,10 +84,21 @@ are already decided:
 
 ```bash
 kiota generate -l CSharp -d http://localhost:8080/openapi.json -o ./FffClient -c FffClient
+dotnet add package Microsoft.Kiota.Bundle
 ```
 
-A snapshot test fails CI on any unintended contract change, so a change to the contract is
-always a reviewed event rather than a runtime surprise downstream.
+This is verified, not assumed: generation completes with **no warnings** and the generated
+project compiles with no warnings or errors. The contract carries an absolute server url, so
+the client's base address is set for you.
+
+Three wire shapes are flatter than the Rust types behind them - parsed constraints, locations
+and mixed hits each use a closed `type` enum with optional payload fields rather than a
+discriminated union. That is deliberate: utoipa renders a tagged Rust enum as a `oneOf` with
+no discriminator, which generators either mis-deserialise or refuse. See DESIGN.md.
+
+A snapshot test fails CI on any unintended contract change, and further tests pin those three
+schemas flat, so a change that would break codegen shows up as a failing test rather than in
+your build output.
 
 ## Configuration
 

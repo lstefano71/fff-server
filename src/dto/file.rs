@@ -198,35 +198,64 @@ impl From<&Score> for ScoreDto {
     }
 }
 
-/// A `file.ts:42:10` suffix parsed out of the query. The MCP server discards this entirely.
-#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum LocationDto {
-    Line { line: i32 },
-    Position { line: i32, col: i32 },
-    Range { start: LineCol, end: LineCol },
+/// Which parts of a location the query specified.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum LocationType {
+    /// `line` only, from `file.ts:42`.
+    Line,
+    /// `line` and `col`, from `file.ts:42:10`.
+    Position,
+    /// `line`/`col` as the start and `endLine`/`endCol` as the end.
+    Range,
 }
 
+/// A `file.ts:42:10` suffix parsed out of the query. `line` is always present; `col`,
+/// `endLine` and `endCol` depend on `type`.
+//
+// Flat rather than a discriminated union: utoipa renders one as a `oneOf` with no
+// discriminator, which generators reject or mis-deserialise. See DESIGN.md.
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
-pub struct LineCol {
+#[serde(rename_all = "camelCase")]
+pub struct LocationDto {
+    #[serde(rename = "type")]
+    #[schema(rename = "type")]
+    pub location_type: LocationType,
     pub line: i32,
-    pub col: i32,
+    /// Present for `position` and `range`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub col: Option<i32>,
+    /// Present for `range` only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_line: Option<i32>,
+    /// Present for `range` only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_col: Option<i32>,
 }
 
 impl From<Location> for LocationDto {
     fn from(l: Location) -> Self {
         match l {
-            Location::Line(line) => Self::Line { line },
-            Location::Position { line, col } => Self::Position { line, col },
-            Location::Range { start, end } => Self::Range {
-                start: LineCol {
-                    line: start.0,
-                    col: start.1,
-                },
-                end: LineCol {
-                    line: end.0,
-                    col: end.1,
-                },
+            Location::Line(line) => Self {
+                location_type: LocationType::Line,
+                line,
+                col: None,
+                end_line: None,
+                end_col: None,
+            },
+            Location::Position { line, col } => Self {
+                location_type: LocationType::Position,
+                line,
+                col: Some(col),
+                end_line: None,
+                end_col: None,
+            },
+            Location::Range { start, end } => Self {
+                location_type: LocationType::Range,
+                line: start.0,
+                col: Some(start.1),
+                end_line: Some(end.0),
+                end_col: Some(end.1),
             },
         }
     }
