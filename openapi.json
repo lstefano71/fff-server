@@ -964,39 +964,54 @@
         ]
       },
       "ConstraintDto": {
-        "type": "object",
-        "description": "One parsed constraint. `type` says which field carries the payload.",
-        "required": [
-          "type",
-          "negated"
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ExtensionConstraint"
+          },
+          {
+            "$ref": "#/components/schemas/GlobConstraint"
+          },
+          {
+            "$ref": "#/components/schemas/PartsConstraint"
+          },
+          {
+            "$ref": "#/components/schemas/TextConstraint"
+          },
+          {
+            "$ref": "#/components/schemas/ExcludeConstraint"
+          },
+          {
+            "$ref": "#/components/schemas/PathSegmentConstraint"
+          },
+          {
+            "$ref": "#/components/schemas/FilePathConstraint"
+          },
+          {
+            "$ref": "#/components/schemas/FileTypeConstraint"
+          },
+          {
+            "$ref": "#/components/schemas/GitStatusConstraintDto"
+          }
         ],
-        "properties": {
-          "negated": {
-            "type": "boolean",
-            "description": "True for a negated constraint such as `!tests/`. Nested negation is collapsed, so\n`Not(Not(x))` reports the inner constraint with `negated: false` rather than losing a\nlevel."
-          },
-          "type": {
-            "$ref": "#/components/schemas/ConstraintType"
-          },
-          "value": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "The single-valued payload, for every type except `parts` and `exclude`."
-          },
-          "values": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The multi-valued payload, for `parts` and `exclude`."
+        "description": "One parsed constraint, as a discriminated union on `type`.",
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "exclude": "#/components/schemas/ExcludeConstraint",
+            "extension": "#/components/schemas/ExtensionConstraint",
+            "filePath": "#/components/schemas/FilePathConstraint",
+            "fileType": "#/components/schemas/FileTypeConstraint",
+            "gitStatus": "#/components/schemas/GitStatusConstraintDto",
+            "glob": "#/components/schemas/GlobConstraint",
+            "parts": "#/components/schemas/PartsConstraint",
+            "pathSegment": "#/components/schemas/PathSegmentConstraint",
+            "text": "#/components/schemas/TextConstraint"
           }
         }
       },
       "ConstraintType": {
         "type": "string",
-        "description": "What kind of thing a constraint constrains.",
+        "description": "What kind of thing a constraint constrains. Also the discriminator value.",
         "enum": [
           "extension",
           "glob",
@@ -1209,6 +1224,53 @@
           }
         }
       },
+      "ExcludeConstraint": {
+        "type": "object",
+        "description": "Terms to exclude.",
+        "required": [
+          "type",
+          "negated",
+          "values"
+        ],
+        "properties": {
+          "negated": {
+            "type": "boolean",
+            "description": "True when the constraint was negated, as in `!tests/`."
+          },
+          "type": {
+            "$ref": "#/components/schemas/ConstraintType",
+            "description": "Always `exclude`. The discriminator."
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ExtensionConstraint": {
+        "type": "object",
+        "description": "A file extension, without a dot.",
+        "required": [
+          "type",
+          "negated",
+          "value"
+        ],
+        "properties": {
+          "negated": {
+            "type": "boolean",
+            "description": "True when the constraint was negated, as in `!tests/`."
+          },
+          "type": {
+            "$ref": "#/components/schemas/ConstraintType",
+            "description": "Always `extension`. The discriminator."
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
       "FileItemDto": {
         "type": "object",
         "description": "An indexed file.",
@@ -1276,6 +1338,50 @@
             "type": "integer",
             "format": "int32",
             "description": "Access plus modification only — deliberately excluding `gitRecencyScore`, matching\nthe engine's own `total_frecency_score()`."
+          }
+        }
+      },
+      "FilePathConstraint": {
+        "type": "object",
+        "description": "A repo-relative file path suffix.",
+        "required": [
+          "type",
+          "negated",
+          "path"
+        ],
+        "properties": {
+          "negated": {
+            "type": "boolean",
+            "description": "True when the constraint was negated, as in `!tests/`."
+          },
+          "path": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ConstraintType",
+            "description": "Always `filePath`. The discriminator."
+          }
+        }
+      },
+      "FileTypeConstraint": {
+        "type": "object",
+        "description": "One of the engine's file-type names, e.g. `rust`.",
+        "required": [
+          "type",
+          "negated",
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "negated": {
+            "type": "boolean",
+            "description": "True when the constraint was negated, as in `!tests/`."
+          },
+          "type": {
+            "$ref": "#/components/schemas/ConstraintType",
+            "description": "Always `fileType`. The discriminator."
           }
         }
       },
@@ -1356,6 +1462,60 @@
           "staged",
           "unmodified"
         ]
+      },
+      "GitStatusConstraintDto": {
+        "type": "object",
+        "description": "A git status category.",
+        "required": [
+          "type",
+          "negated",
+          "status"
+        ],
+        "properties": {
+          "negated": {
+            "type": "boolean",
+            "description": "True when the constraint was negated, as in `!tests/`."
+          },
+          "status": {
+            "$ref": "#/components/schemas/GitStatusValue"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ConstraintType",
+            "description": "Always `gitStatus`. The discriminator."
+          }
+        }
+      },
+      "GitStatusValue": {
+        "type": "string",
+        "description": "The git status categories the engine can filter on.",
+        "enum": [
+          "modified",
+          "untracked",
+          "staged",
+          "unmodified"
+        ]
+      },
+      "GlobConstraint": {
+        "type": "object",
+        "description": "A glob pattern. Forward slashes only.",
+        "required": [
+          "type",
+          "negated",
+          "pattern"
+        ],
+        "properties": {
+          "negated": {
+            "type": "boolean",
+            "description": "True when the constraint was negated, as in `!tests/`."
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ConstraintType",
+            "description": "Always `glob`. The discriminator."
+          }
+        }
       },
       "GlobRequest": {
         "type": "object",
@@ -1720,7 +1880,7 @@
       },
       "LocationDto": {
         "type": "object",
-        "description": "A `file.ts:42:10` suffix parsed out of the query. `line` is always present; `col`,\n`endLine` and `endCol` depend on `type`.",
+        "description": "A `file.ts:42:10` suffix parsed out of the query. The MCP server discards this entirely.\n\n`line` is always present; `col`, `endLine` and `endCol` depend on `type`.",
         "required": [
           "type",
           "line"
@@ -1761,46 +1921,70 @@
       },
       "LocationType": {
         "type": "string",
-        "description": "Which parts of a location the query specified.",
+        "description": "Which kind of location a query specified.",
         "enum": [
           "line",
           "position",
           "range"
         ]
       },
-      "MixedHit": {
+      "MixedDirectoryHit": {
         "type": "object",
-        "description": "A hit from a mixed search. Exactly one of `file` and `directory` is populated, indicated\nby `type`.",
+        "description": "A directory from a mixed search.",
         "required": [
           "type",
+          "item",
           "score"
         ],
         "properties": {
-          "directory": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/DirItemDto"
-              }
-            ]
-          },
-          "file": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/FileItemDto"
-              }
-            ]
+          "item": {
+            "$ref": "#/components/schemas/DirItemDto"
           },
           "score": {
             "$ref": "#/components/schemas/ScoreDto"
           },
           "type": {
-            "$ref": "#/components/schemas/MixedKind"
+            "$ref": "#/components/schemas/MixedKind",
+            "description": "Always `directory`. The discriminator."
+          }
+        }
+      },
+      "MixedFileHit": {
+        "type": "object",
+        "description": "A file from a mixed search.",
+        "required": [
+          "type",
+          "item",
+          "score"
+        ],
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/FileItemDto"
+          },
+          "score": {
+            "$ref": "#/components/schemas/ScoreDto"
+          },
+          "type": {
+            "$ref": "#/components/schemas/MixedKind",
+            "description": "Always `file`. The discriminator."
+          }
+        }
+      },
+      "MixedHit": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/MixedFileHit"
+          },
+          {
+            "$ref": "#/components/schemas/MixedDirectoryHit"
+          }
+        ],
+        "description": "A hit from a mixed search: a file or a directory, distinguished by `type`.",
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "directory": "#/components/schemas/MixedDirectoryHit",
+            "file": "#/components/schemas/MixedFileHit"
           }
         }
       },
@@ -2038,6 +2222,53 @@
               "type": "string"
             },
             "description": "Problems that would otherwise pass unnoticed."
+          }
+        }
+      },
+      "PartsConstraint": {
+        "type": "object",
+        "description": "Several text parts, all of which must match.",
+        "required": [
+          "type",
+          "negated",
+          "values"
+        ],
+        "properties": {
+          "negated": {
+            "type": "boolean",
+            "description": "True when the constraint was negated, as in `!tests/`."
+          },
+          "type": {
+            "$ref": "#/components/schemas/ConstraintType",
+            "description": "Always `parts`. The discriminator."
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PathSegmentConstraint": {
+        "type": "object",
+        "description": "A path segment a result must sit under.",
+        "required": [
+          "type",
+          "negated",
+          "segment"
+        ],
+        "properties": {
+          "negated": {
+            "type": "boolean",
+            "description": "True when the constraint was negated, as in `!tests/`."
+          },
+          "segment": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ConstraintType",
+            "description": "Always `pathSegment`. The discriminator."
           }
         }
       },
@@ -2390,6 +2621,28 @@
           }
         },
         "additionalProperties": false
+      },
+      "TextConstraint": {
+        "type": "object",
+        "description": "Literal text a path must contain.",
+        "required": [
+          "type",
+          "negated",
+          "value"
+        ],
+        "properties": {
+          "negated": {
+            "type": "boolean",
+            "description": "True when the constraint was negated, as in `!tests/`."
+          },
+          "type": {
+            "$ref": "#/components/schemas/ConstraintType",
+            "description": "Always `text`. The discriminator."
+          },
+          "value": {
+            "type": "string"
+          }
+        }
       },
       "TrackAccessRequest": {
         "type": "object",

@@ -198,7 +198,7 @@ impl From<&Score> for ScoreDto {
     }
 }
 
-/// Which parts of a location the query specified.
+/// Which kind of location a query specified.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum LocationType {
@@ -206,15 +206,20 @@ pub enum LocationType {
     Line,
     /// `line` and `col`, from `file.ts:42:10`.
     Position,
-    /// `line`/`col` as the start and `endLine`/`endCol` as the end.
+    /// `line`/`col` as the start, `endLine`/`endCol` as the end.
     Range,
 }
 
-/// A `file.ts:42:10` suffix parsed out of the query. `line` is always present; `col`,
-/// `endLine` and `endCol` depend on `type`.
+/// A `file.ts:42:10` suffix parsed out of the query. The MCP server discards this entirely.
+///
+/// `line` is always present; `col`, `endLine` and `endCol` depend on `type`.
 //
-// Flat rather than a discriminated union: utoipa renders one as a `oneOf` with no
-// discriminator, which generators reject or mis-deserialise. See DESIGN.md.
+// This one stays flat while ConstraintDto and MixedHit are proper discriminated unions,
+// because it is the only union that appears as an *optional* field. utoipa renders
+// `Option<T>` as `oneOf: [null, $ref]`, and nesting a discriminated union inside that loses
+// the inheritance relationship Kiota needs ("Discriminator LineLocation is not inherited from
+// LocationDto"). Generation still succeeded, but warning-free is worth more here than a union
+// over three shapes that differ only in which trailing fields are set.
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LocationDto {

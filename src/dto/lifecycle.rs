@@ -87,54 +87,188 @@ pub struct ParseQueryRequest {
     pub preset: ParsePreset,
 }
 
-/// What kind of thing a constraint constrains.
+/// What kind of thing a constraint constrains. Also the discriminator value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum ConstraintType {
-    /// `value` holds the extension, without a dot.
     Extension,
-    /// `value` holds the glob pattern.
     Glob,
-    /// `values` holds the text parts.
     Parts,
-    /// `value` holds the literal text.
     Text,
-    /// `values` holds the excluded terms.
     Exclude,
-    /// `value` holds the path segment.
     PathSegment,
-    /// `value` holds the repo-relative file path.
     FilePath,
-    /// `value` holds the engine's file-type name.
     FileType,
-    /// `value` is one of `modified`, `untracked`, `staged`, `unmodified`.
     GitStatus,
 }
 
-/// One parsed constraint. `type` says which field carries the payload.
-//
-// Flat rather than a discriminated union, for two reasons found the hard way. Mirroring
-// the engine's `Not(Box<Constraint>)` made this type recursive, which sent utoipa's schema
-// generation into infinite recursion and overflowed the stack at startup. Replacing that
-// with a `oneOf` plus a flattened sibling field then produced a schema Kiota refuses to
-// generate from at all: an `allOf` over an anonymous `oneOf`, with no discriminator and no
-// named variants to map one to. See DESIGN.md.
+/// The git status categories the engine can filter on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum GitStatusValue {
+    Modified,
+    Untracked,
+    Staged,
+    Unmodified,
+}
+
+impl From<GitStatusFilter> for GitStatusValue {
+    fn from(g: GitStatusFilter) -> Self {
+        match g {
+            GitStatusFilter::Modified => Self::Modified,
+            GitStatusFilter::Untracked => Self::Untracked,
+            GitStatusFilter::Staged => Self::Staged,
+            GitStatusFilter::Unmodified => Self::Unmodified,
+        }
+    }
+}
+
+/// A file extension, without a dot.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct ConstraintDto {
+pub struct ExtensionConstraint {
+    /// Always `extension`. The discriminator.
     #[serde(rename = "type")]
     #[schema(rename = "type")]
     pub constraint_type: ConstraintType,
-    /// True for a negated constraint such as `!tests/`. Nested negation is collapsed, so
-    /// `Not(Not(x))` reports the inner constraint with `negated: false` rather than losing a
-    /// level.
+    /// True when the constraint was negated, as in `!tests/`.
     pub negated: bool,
-    /// The single-valued payload, for every type except `parts` and `exclude`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub value: Option<String>,
-    /// The multi-valued payload, for `parts` and `exclude`.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub value: String,
+}
+
+/// A glob pattern. Forward slashes only.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobConstraint {
+    /// Always `glob`. The discriminator.
+    #[serde(rename = "type")]
+    #[schema(rename = "type")]
+    pub constraint_type: ConstraintType,
+    /// True when the constraint was negated, as in `!tests/`.
+    pub negated: bool,
+    pub pattern: String,
+}
+
+/// Several text parts, all of which must match.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PartsConstraint {
+    /// Always `parts`. The discriminator.
+    #[serde(rename = "type")]
+    #[schema(rename = "type")]
+    pub constraint_type: ConstraintType,
+    /// True when the constraint was negated, as in `!tests/`.
+    pub negated: bool,
     pub values: Vec<String>,
+}
+
+/// Literal text a path must contain.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TextConstraint {
+    /// Always `text`. The discriminator.
+    #[serde(rename = "type")]
+    #[schema(rename = "type")]
+    pub constraint_type: ConstraintType,
+    /// True when the constraint was negated, as in `!tests/`.
+    pub negated: bool,
+    pub value: String,
+}
+
+/// Terms to exclude.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExcludeConstraint {
+    /// Always `exclude`. The discriminator.
+    #[serde(rename = "type")]
+    #[schema(rename = "type")]
+    pub constraint_type: ConstraintType,
+    /// True when the constraint was negated, as in `!tests/`.
+    pub negated: bool,
+    pub values: Vec<String>,
+}
+
+/// A path segment a result must sit under.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PathSegmentConstraint {
+    /// Always `pathSegment`. The discriminator.
+    #[serde(rename = "type")]
+    #[schema(rename = "type")]
+    pub constraint_type: ConstraintType,
+    /// True when the constraint was negated, as in `!tests/`.
+    pub negated: bool,
+    pub segment: String,
+}
+
+/// A repo-relative file path suffix.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FilePathConstraint {
+    /// Always `filePath`. The discriminator.
+    #[serde(rename = "type")]
+    #[schema(rename = "type")]
+    pub constraint_type: ConstraintType,
+    /// True when the constraint was negated, as in `!tests/`.
+    pub negated: bool,
+    pub path: String,
+}
+
+/// One of the engine's file-type names, e.g. `rust`.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FileTypeConstraint {
+    /// Always `fileType`. The discriminator.
+    #[serde(rename = "type")]
+    #[schema(rename = "type")]
+    pub constraint_type: ConstraintType,
+    /// True when the constraint was negated, as in `!tests/`.
+    pub negated: bool,
+    pub name: String,
+}
+
+/// A git status category.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GitStatusConstraintDto {
+    /// Always `gitStatus`. The discriminator.
+    #[serde(rename = "type")]
+    #[schema(rename = "type")]
+    pub constraint_type: ConstraintType,
+    /// True when the constraint was negated, as in `!tests/`.
+    pub negated: bool,
+    pub status: GitStatusValue,
+}
+
+/// One parsed constraint, as a discriminated union on `type`.
+//
+// Each variant is its own named schema so utoipa can emit a real discriminator, and so each
+// kind keeps a payload field named for what it is (`pattern`, `segment`, `path`, `status`)
+// rather than a generic `value`. `untagged` because the variant structs carry `type`
+// themselves, as the OpenAPI discriminator object requires.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(untagged)]
+#[schema(discriminator(property_name = "type", mapping(
+    ("extension" = "#/components/schemas/ExtensionConstraint"),
+    ("glob" = "#/components/schemas/GlobConstraint"),
+    ("parts" = "#/components/schemas/PartsConstraint"),
+    ("text" = "#/components/schemas/TextConstraint"),
+    ("exclude" = "#/components/schemas/ExcludeConstraint"),
+    ("pathSegment" = "#/components/schemas/PathSegmentConstraint"),
+    ("filePath" = "#/components/schemas/FilePathConstraint"),
+    ("fileType" = "#/components/schemas/FileTypeConstraint"),
+    ("gitStatus" = "#/components/schemas/GitStatusConstraintDto"),
+)))]
+pub enum ConstraintDto {
+    Extension(ExtensionConstraint),
+    Glob(GlobConstraint),
+    Parts(PartsConstraint),
+    Text(TextConstraint),
+    Exclude(ExcludeConstraint),
+    PathSegment(PathSegmentConstraint),
+    FilePath(FilePathConstraint),
+    FileType(FileTypeConstraint),
+    GitStatus(GitStatusConstraintDto),
 }
 
 impl ConstraintDto {
@@ -142,46 +276,65 @@ impl ConstraintDto {
         let mut negated = false;
         let mut current = c;
         // Unwrap however many Not layers the parser produced, toggling as we go, so double
-        // negation is reported accurately rather than flattened to "negated".
+        // negation is reported accurately rather than collapsed to "negated".
         while let Constraint::Not(inner) = current {
             negated = !negated;
             current = inner;
         }
 
-        let single = |t: ConstraintType, v: &str| Self {
-            constraint_type: t,
-            negated,
-            value: Some(v.to_owned()),
-            values: Vec::new(),
-        };
-        let multi = |t: ConstraintType, vs: &[&str]| Self {
-            constraint_type: t,
-            negated,
-            value: None,
-            values: vs.iter().map(|v| (*v).to_owned()).collect(),
-        };
-
         match current {
-            Constraint::Extension(v) => single(ConstraintType::Extension, v),
-            Constraint::Glob(p) => single(ConstraintType::Glob, p),
-            Constraint::Parts(vs) => multi(ConstraintType::Parts, vs),
-            Constraint::Text(v) => single(ConstraintType::Text, v),
-            Constraint::Exclude(vs) => multi(ConstraintType::Exclude, vs),
-            Constraint::PathSegment(s) => single(ConstraintType::PathSegment, s),
-            Constraint::FilePath(p) => single(ConstraintType::FilePath, p),
-            Constraint::FileType(n) => single(ConstraintType::FileType, n),
-            Constraint::GitStatus(g) => single(
-                ConstraintType::GitStatus,
-                match g {
-                    GitStatusFilter::Modified => "modified",
-                    GitStatusFilter::Untracked => "untracked",
-                    GitStatusFilter::Staged => "staged",
-                    GitStatusFilter::Unmodified => "unmodified",
-                },
-            ),
+            Constraint::Extension(v) => Self::Extension(ExtensionConstraint {
+                constraint_type: ConstraintType::Extension,
+                negated,
+                value: (*v).to_owned(),
+            }),
+            Constraint::Glob(p) => Self::Glob(GlobConstraint {
+                constraint_type: ConstraintType::Glob,
+                negated,
+                pattern: (*p).to_owned(),
+            }),
+            Constraint::Parts(vs) => Self::Parts(PartsConstraint {
+                constraint_type: ConstraintType::Parts,
+                negated,
+                values: vs.iter().map(|v| (*v).to_owned()).collect(),
+            }),
+            Constraint::Text(v) => Self::Text(TextConstraint {
+                constraint_type: ConstraintType::Text,
+                negated,
+                value: (*v).to_owned(),
+            }),
+            Constraint::Exclude(vs) => Self::Exclude(ExcludeConstraint {
+                constraint_type: ConstraintType::Exclude,
+                negated,
+                values: vs.iter().map(|v| (*v).to_owned()).collect(),
+            }),
+            Constraint::PathSegment(s) => Self::PathSegment(PathSegmentConstraint {
+                constraint_type: ConstraintType::PathSegment,
+                negated,
+                segment: (*s).to_owned(),
+            }),
+            Constraint::FilePath(p) => Self::FilePath(FilePathConstraint {
+                constraint_type: ConstraintType::FilePath,
+                negated,
+                path: (*p).to_owned(),
+            }),
+            Constraint::FileType(n) => Self::FileType(FileTypeConstraint {
+                constraint_type: ConstraintType::FileType,
+                negated,
+                name: (*n).to_owned(),
+            }),
+            Constraint::GitStatus(g) => Self::GitStatus(GitStatusConstraintDto {
+                constraint_type: ConstraintType::GitStatus,
+                negated,
+                status: GitStatusValue::from(*g),
+            }),
             // Unreachable: every Not was unwrapped above. Represented rather than panicking,
             // because Constraint is an external type that may gain variants.
-            Constraint::Not(_) => single(ConstraintType::Text, ""),
+            Constraint::Not(_) => Self::Text(TextConstraint {
+                constraint_type: ConstraintType::Text,
+                negated,
+                value: String::new(),
+            }),
         }
     }
 }

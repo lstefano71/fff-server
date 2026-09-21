@@ -76,41 +76,62 @@ pub enum MixedKind {
     Directory,
 }
 
-/// A hit from a mixed search. Exactly one of `file` and `directory` is populated, indicated
-/// by `type`.
-//
-// Flat rather than a discriminated union: utoipa renders one as a `oneOf` with no
-// discriminator, which generators reject or mis-deserialise. See DESIGN.md.
+/// A file from a mixed search.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct MixedHit {
+pub struct MixedFileHit {
+    /// Always `file`. The discriminator.
     #[serde(rename = "type")]
     #[schema(rename = "type")]
     pub kind: MixedKind,
+    pub item: FileItemDto,
     pub score: ScoreDto,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub file: Option<FileItemDto>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub directory: Option<DirItemDto>,
+}
+
+/// A directory from a mixed search.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MixedDirectoryHit {
+    /// Always `directory`. The discriminator.
+    #[serde(rename = "type")]
+    #[schema(rename = "type")]
+    pub kind: MixedKind,
+    pub item: DirItemDto,
+    pub score: ScoreDto,
+}
+
+/// A hit from a mixed search: a file or a directory, distinguished by `type`.
+//
+// A genuine discriminated union, which utoipa will only emit for an enum whose variants are
+// newtypes over *named* schemas - inline variants give an anonymous `oneOf` that no generator
+// can map a discriminator onto. `untagged` because each variant struct carries the `type`
+// property itself, which is what the OpenAPI discriminator object requires.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(untagged)]
+#[schema(discriminator(property_name = "type", mapping(
+    ("file" = "#/components/schemas/MixedFileHit"),
+    ("directory" = "#/components/schemas/MixedDirectoryHit"),
+)))]
+pub enum MixedHit {
+    File(MixedFileHit),
+    Directory(MixedDirectoryHit),
 }
 
 impl MixedHit {
     pub fn file(item: FileItemDto, score: ScoreDto) -> Self {
-        Self {
+        Self::File(MixedFileHit {
             kind: MixedKind::File,
+            item,
             score,
-            file: Some(item),
-            directory: None,
-        }
+        })
     }
 
     pub fn directory(item: DirItemDto, score: ScoreDto) -> Self {
-        Self {
+        Self::Directory(MixedDirectoryHit {
             kind: MixedKind::Directory,
+            item,
             score,
-            file: None,
-            directory: Some(item),
-        }
+        })
     }
 }
 

@@ -80,25 +80,61 @@ The contract is at `GET /openapi.json`, and committed as [openapi.json](openapi.
 
 The OpenAPI document is generated from the Rust types, so it cannot drift from the engine.
 Generate the client in your own solution, where the target framework and naming conventions
-are already decided:
+are already decided.
+
+Three generators were tried against this contract, and the output compiled, rather than
+assumed to work. Results:
+
+| Generator | Result | Unions become |
+|---|---|---|
+| **[Refitter](https://github.com/christianhelle/refitter)** | Clean generate, clean build | Base class + derived types + `JsonInheritanceConverter` on `type` |
+| **[Kiota](https://learn.microsoft.com/openapi/kiota/)** | Clean generate, clean build, no warnings | Composed-type wrapper with one nullable property per variant |
+| **NSwag** (CLI, defaults) | Does not compile | Emits `ICollection<Constraints>` / `ICollection<Items>` without defining those types |
+
+**Refitter is the recommendation.** It is a single `dotnet tool`, needs only Refit and
+`System.Text.Json` with no proprietary runtime, produces a DI-friendly interface, and turns
+the discriminated unions into ordinary C# polymorphism:
+
+```bash
+dotnet tool install --global Refitter
+refitter openapi.json --namespace FffClient --output ./FffClient/FffClient.cs
+dotnet add package Refit
+```
+
+```csharp
+foreach (var hit in response.Items)          // ICollection<MixedHit>
+    if (hit is MixedFileHit file)
+        Console.WriteLine(file.Item.RelativePath);
+```
+
+Kiota is a perfectly good alternative and is also verified:
 
 ```bash
 kiota generate -l CSharp -d http://localhost:8080/openapi.json -o ./FffClient -c FffClient
 dotnet add package Microsoft.Kiota.Bundle
 ```
 
-This is verified, not assumed: generation completes with **no warnings** and the generated
-project compiles with no warnings or errors. The contract carries an absolute server url, so
-the client's base address is set for you.
+NSwag's failure is in its own generation, not in the contract, and is likely fixable with
+generation-mode flags — not pursued, since two generators already work.
 
-Three wire shapes are flatter than the Rust types behind them - parsed constraints, locations
-and mixed hits each use a closed `type` enum with optional payload fields rather than a
-discriminated union. That is deliberate: utoipa renders a tagged Rust enum as a `oneOf` with
-no discriminator, which generators either mis-deserialise or refuse. See DESIGN.md.
+The contract carries an absolute server url, so a generated client's base address is set for
+you.
 
-A snapshot test fails CI on any unintended contract change, and further tests pin those three
-schemas flat, so a change that would break codegen shows up as a failing test rather than in
-your build output.
+### Shapes
+
+`ConstraintDto` and `MixedHit` are proper discriminated unions: a `oneOf` of named variant
+schemas plus an OpenAPI `discriminator` on `type`. That is what makes them generatable —
+utoipa only emits a discriminator for an enum whose variants are newtypes over *named*
+schemas, and an anonymous `oneOf` is something generators either refuse or mis-deserialise.
+
+`LocationDto` is deliberately flat, because it is the only union that appears as an optional
+field and nesting a union inside `oneOf: [null, $ref]` loses the inheritance relationship
+Kiota needs. See DESIGN.md.
+
+A snapshot test fails CI on any unintended contract change, and a further test asserts the
+unions keep their discriminator, mapping, and a required `type` on every variant — so a
+change that would break your codegen shows up as a failing test rather than in your build
+output.
 
 ## Configuration
 

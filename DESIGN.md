@@ -513,35 +513,49 @@ modern .NET: cleaner `HttpClient`-based output, no Newtonsoft dependency.
 
 ### Generator constraints the contract has to respect
 
-Verified by actually running `kiota generate` and compiling the output, not by assuming.
-Three findings, all of which changed the wire shapes:
+Established by running three generators and compiling their output, not by reasoning about
+the spec.
 
-**No `oneOf` for our own unions.** utoipa renders a serde-tagged Rust enum as a `oneOf` of
-*inline* variants with no `discriminator`. Kiota treats any `oneOf` as polymorphic and wants a
-discriminator whose mapping points at *named* schemas, so it cannot be satisfied by adding one
-either. It warned on `LocationDto` and `MixedHit`, and refused outright on `ConstraintDto`,
-which was additionally wrapped in an `allOf` (`The type does not contain any information`).
+| Generator | Generate | Compile | Unions become |
+|---|---|---|---|
+| Refitter 2.2.1 | clean | clean | base class + derived types + `JsonInheritanceConverter("type")` |
+| Kiota | clean, no warnings | clean | composed-type wrapper, one nullable property per variant |
+| NSwag 14.7.1 CLI, defaults | clean | **fails** | references `ICollection<Constraints>` / `ICollection<Items>` without defining them |
 
-All three are now flat objects with a closed `type` enum and optional payload fields. That
-generates idiomatic C# - a real enum plus nullable properties - and a working client beats an
-elegant shape no client can consume. A test pins the three schemas as flat.
+**A union must carry a real discriminator.** utoipa emits one only for an enum whose variants
+are newtypes over *named* schemas; inline variants produce an anonymous `oneOf` with nothing
+to map to. Kiota warned on two such schemas and refused outright on a third that was also
+wrapped in an `allOf` (`The type does not contain any information`). `#[serde(untagged)]` is
+used so each variant struct carries the `type` property itself, which the OpenAPI
+discriminator object requires; `required: [type]` matters too, since an optional discriminator
+is not usable.
 
-**An opaque token should be declared as a string.** `Option<GrepCursor>` rendered as
-`oneOf: [null, $ref]`, which Kiota read as polymorphism (`Discriminator GrepCursor is not
-inherited from GrepCursor`). The cursor fields now declare `value_type = Option<String>`;
-`GrepCursor` stays a newtype in Rust, while the contract says what it is on the wire.
+`ConstraintDto` and `MixedHit` are unions on those terms. Each constraint kind also regains a
+payload field named for what it is — `pattern`, `segment`, `path`, `status` — rather than a
+generic `value`, which a flat shape had to use.
 
-Note nullable *object* references still render as `oneOf: [null, $ref]` and Kiota handles
-those silently, so this is specifically about scalars behind a `$ref`.
+**A union must not also be optional.** `Option<T>` renders as `oneOf: [null, $ref]`, and
+nesting a discriminated union inside that makes Kiota lose the inheritance relationship
+("Discriminator LineLocation is not inherited from LocationDto"). `LocationDto` is the only
+optional union, and stays a flat object with a `type` enum and nullable trailing fields.
+
+**An opaque token should be declared as a string.** `Option<GrepCursor>` also rendered as
+`oneOf: [null, $ref]`, which Kiota read as polymorphism. The cursor fields declare
+`value_type = Option<String>`; `GrepCursor` stays a newtype in Rust. Nullable *object*
+references render the same way and are handled silently, so this is specifically about scalars
+behind a `$ref`.
 
 **The server url must be absolute.** A relative `/` entry is valid OpenAPI but Kiota ignores
-it and reports no server url, leaving the base address to be wired up by hand. The contract
-declares `http://localhost:8080`, which a client pointed elsewhere simply overrides.
+it and reports no server url, leaving the base address to be wired by hand.
 
-**Implementation rationale stays out of `///` doc comments** on wire types, because utoipa
-puts those in the schema `description` and Kiota puts the description in the generated
-IntelliSense. Notes about utoipa and Kiota belong in this document, not in a consumer's
-tooltip.
+**Implementation rationale stays out of `///` doc comments** on wire types. utoipa puts those
+in the schema `description` and generators put the description into the client's IntelliSense,
+so notes about utoipa and Kiota belong in this document, not in a consumer's tooltip.
+
+One correction worth recording: an earlier draft of this section guessed NSwag would be "more
+permissive" than Kiota and might paper over a missing discriminator. Tested, NSwag failed
+hardest of the three, and Kiota's refusal to generate was the most useful behaviour — a loud
+failure beats a client that compiles and mis-deserialises.
 
 An `openapi.json` snapshot test fails CI on any unintended contract change, so a contract
 change is always a reviewed event rather than a runtime surprise downstream.

@@ -64,38 +64,79 @@ fn problem_schema_is_published_for_clients() {
     );
 }
 
-/// The shapes that broke C# generation, pinned so they cannot creep back.
+/// The unions must stay *properly* discriminated, because that is what makes them
+/// generatable at all.
 ///
-/// utoipa renders a serde-tagged Rust enum as a `oneOf` of inline variants with no
-/// discriminator. Kiota treats any `oneOf` as polymorphic and requires a discriminator whose
-/// mapping points at named schemas, so it warned on three of ours and refused outright on the
-/// one that was also wrapped in an `allOf`. These three are now flat objects with a closed
-/// `type` enum instead.
+/// utoipa emits an OpenAPI `discriminator` only for an enum whose variants are newtypes over
+/// named schemas. Inline variants produce an anonymous `oneOf` that no generator can map a
+/// discriminator onto - Kiota warned on two of these and refused outright on the third. This
+/// asserts the whole shape: a `oneOf` of `$ref`s, a discriminator naming `type`, a mapping
+/// covering every variant, and a `type` property present on each referenced schema, which the
+/// OpenAPI discriminator object requires.
+///
+/// `LocationDto` is deliberately not in this list: it is the only union that appears as an
+/// optional field, and nesting a discriminated union inside `oneOf: [null, $ref]` makes Kiota
+/// lose the inheritance relationship. It stays a flat object instead.
 #[test]
-fn schemas_that_broke_codegen_stay_flat() {
+fn unions_are_properly_discriminated() {
     let doc = fff_server::openapi_document();
     let json = serde_json::to_value(&doc).expect("serialise");
     let schemas = &json["components"]["schemas"];
 
-    for name in ["ConstraintDto", "LocationDto", "MixedHit"] {
+    for name in ["ConstraintDto", "MixedHit"] {
         let schema = &schemas[name];
-        assert!(
-            !schema.as_object().unwrap().contains_key("oneOf"),
-            "{name} became a oneOf again; C# generation fails or mis-deserialises on those"
-        );
-        assert!(
-            !schema.as_object().unwrap().contains_key("allOf"),
-            "{name} became an allOf again; Kiota cannot merge one over an anonymous oneOf"
-        );
+
+        let variants = schema["oneOf"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{name} must be a oneOf of variant refs"));
+        assert!(!variants.is_empty(), "{name} has no variants");
+
+        let refs: Vec<&str> = variants
+            .iter()
+            .map(|v| {
+                v["$ref"].as_str().unwrap_or_else(|| {
+                    panic!("{name} variant is inline, not a $ref; a discriminator cannot map to it")
+                })
+            })
+            .collect();
+
+        let discriminator = &schema["discriminator"];
         assert_eq!(
-            schema["type"].as_str(),
-            Some("object"),
-            "{name} should be a plain object"
+            discriminator["propertyName"].as_str(),
+            Some("type"),
+            "{name} needs a discriminator on `type`"
         );
-        assert!(
-            schema["properties"]["type"].is_object(),
-            "{name} needs its `type` discriminant as an ordinary property"
+
+        let mapping = discriminator["mapping"]
+            .as_object()
+            .unwrap_or_else(|| panic!("{name} discriminator needs an explicit mapping"));
+        assert_eq!(
+            mapping.len(),
+            refs.len(),
+            "{name} mapping must cover every variant"
         );
+
+        for (value, target) in mapping {
+            let target = target.as_str().expect("mapping target is a ref string");
+            assert!(
+                refs.contains(&target),
+                "{name} maps {value:?} to {target:?}, which is not one of its variants"
+            );
+
+            // Each referenced schema must itself declare the discriminator property.
+            let variant_name = target.rsplit('/').next().unwrap();
+            let variant = &schemas[variant_name];
+            assert!(
+                variant["properties"]["type"].is_object(),
+                "{variant_name} must declare the `type` property the discriminator reads"
+            );
+            assert!(
+                variant["required"]
+                    .as_array()
+                    .is_some_and(|r| r.iter().any(|f| f == "type")),
+                "{variant_name} must require `type`; an optional discriminator is not usable"
+            );
+        }
     }
 }
 
