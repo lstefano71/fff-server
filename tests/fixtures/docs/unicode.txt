@@ -1,0 +1,5 @@
+ascii line with needle here
+⍝ z is the new needle stage
+emoji 😀 before needle here
+— em dash before needle here
+⍝—😀 all three then needle

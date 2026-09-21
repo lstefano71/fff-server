@@ -537,6 +537,10 @@ machinery more than this server's.
 reference checkout at `d:\devel\fff`. A commented-out `[patch.crates-io]` stanza points at a
 local path, so switching to a working copy for a debugging session is uncommenting two lines.
 
+The `definitions` feature is enabled. It gates the definition classifier, and without it
+`classifyDefinitions` is accepted but can only ever return `false` - which is how it shipped
+until the fixture tests caught it.
+
 Default feature is `ripgrep` (pure Rust `ignore` + `globset`, no external toolchain). `zlob`
 — fff's faster Zig-based walker and glob matcher, used by its own releases — is an opt-in
 Cargo feature, not enabled by default: it requires Zig 0.16, and keeping `cargo build`
@@ -665,4 +669,11 @@ case, since no bits are set.
 5. ~~Lifecycle, tracking, `parse-query`.~~ **Done.** Verified end to end: three
    `track-access` calls raised `accessFrecencyScore` to 3 and the next search reported
    `frecencyBoost: 11`, so the cached score really does reach the scorer.
-6. Fixture tests.
+6. ~~Fixture tests.~~ **Done.** 74 tests: exact assertions against the committed fixture
+   tree, structural ones against this repo, and the contract snapshot.
+
+   The fixture suite immediately earned its place by catching a real defect: definition
+   classification is gated behind `fff-search`'s `definitions` cargo feature, which was not
+   enabled, so `classifyDefinitions` was accepted by the API but could only ever report
+   `false`. Now enabled, and pinned by a test asserting `fn main() {` classifies as a
+   definition.
