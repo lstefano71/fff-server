@@ -144,8 +144,10 @@ function Connect-FffServer {
         (Get-Date) -lt $deadline) {
         if (-not $Quiet) {
             $elapsed = [int]((Get-Date) - $started).TotalSeconds
-            Write-Progress -Activity "Indexing $($ws.root)" `
-                -Status "$($ws.status): $($ws.scannedFilesCount) files scanned, $($ws.indexedFiles) indexed (${elapsed}s)" `
+            $progressStatus = Get-FffWorkspaceProgressStatus -Workspace $ws `
+                -ElapsedSeconds $elapsed
+            Write-Progress -Activity "Preparing $($ws.root)" `
+                -Status $progressStatus `
                 -PercentComplete -1
         }
         Start-Sleep -Milliseconds 700
@@ -211,6 +213,24 @@ function Test-FffWorkspaceReadiness {
         'indexing' { return [bool]$Workspace.isWarmupComplete }
         'watcher' { return [bool]$Workspace.isWatcherReady }
     }
+}
+
+function Get-FffWorkspaceProgressStatus {
+    param(
+        [Parameter(Mandatory)]$Workspace,
+        [Parameter(Mandatory)][int]$ElapsedSeconds
+    )
+
+    if ($Workspace.status -eq 'initialising') {
+        return "Scanning: $($Workspace.scannedFilesCount) files discovered (${ElapsedSeconds}s)"
+    }
+    if (-not $Workspace.isWarmupComplete) {
+        return "Building content index: $($Workspace.indexedFiles) files searchable (${ElapsedSeconds}s)"
+    }
+    if (-not $Workspace.isWatcherReady) {
+        return "Starting filesystem watcher: $($Workspace.indexedFiles) files searchable (${ElapsedSeconds}s)"
+    }
+    "Ready: $($Workspace.indexedFiles) files searchable (${ElapsedSeconds}s)"
 }
 
 # ---------------------------------------------------------------------------- searching

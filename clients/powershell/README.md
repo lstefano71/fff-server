@@ -222,6 +222,11 @@ For a large repository, `Scan` gives the fastest path to `ff`; use the default `
 before relying on fuzzy `fg`. `-TimeoutSeconds` controls how long the client polls, while
 `-Quiet` suppresses connection and progress messages.
 
+The displayed file count is the number of files already available to `ff`, not a percentage
+of content-index warmup. It is normal for all files to be searchable while the client still
+shows `Building content index`; the server does not currently expose a numeric percentage
+for that second phase.
+
 ## Understanding the query DSL
 
 A query can combine constraints and fuzzy/search text:

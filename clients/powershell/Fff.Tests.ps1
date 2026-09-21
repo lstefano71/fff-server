@@ -56,6 +56,20 @@ try {
     }
 
     & $module {
+        $workspace = [pscustomobject]@{
+            status             = 'indexing'
+            scannedFilesCount  = 86936
+            indexedFiles       = 86936
+            isWarmupComplete   = $false
+            isWatcherReady     = $false
+        }
+
+        $status = Get-FffWorkspaceProgressStatus -Workspace $workspace -ElapsedSeconds 349
+        Assert-Equal 'Building content index: 86936 files searchable (349s)' $status `
+            'The progress message must distinguish searchable files from content-index completion.'
+    }
+
+    & $module {
         $script:Polls = 0
 
         function New-TestWorkspace {
