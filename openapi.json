@@ -194,6 +194,274 @@
           }
         }
       }
+    },
+    "/v1/workspaces/{id}/glob": {
+      "post": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Literal glob match, frecency-ranked, bypassing the query parser.",
+        "operationId": "glob",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workspace id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GlobRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Matching files",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid glob pattern",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Index not ready yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{id}/search": {
+      "post": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Fuzzy file search.",
+        "operationId": "search",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workspace id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Ranked file matches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Index not ready yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{id}/search/directories": {
+      "post": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Fuzzy directory search.",
+        "operationId": "search_directories",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workspace id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Ranked directory matches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirSearchResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Index not ready yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{id}/search/mixed": {
+      "post": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Fuzzy search over files and directories together.",
+        "operationId": "search_mixed",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workspace id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Ranked file and directory matches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MixedSearchResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Index not ready yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -294,6 +562,92 @@
         },
         "additionalProperties": false
       },
+      "DirHit": {
+        "type": "object",
+        "required": [
+          "item",
+          "score"
+        ],
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/DirItemDto"
+          },
+          "score": {
+            "$ref": "#/components/schemas/ScoreDto"
+          }
+        }
+      },
+      "DirItemDto": {
+        "type": "object",
+        "description": "An indexed directory.",
+        "required": [
+          "relativePath",
+          "dirName",
+          "absolutePath",
+          "maxAccessFrecency"
+        ],
+        "properties": {
+          "absolutePath": {
+            "type": "string"
+          },
+          "dirName": {
+            "type": "string"
+          },
+          "maxAccessFrecency": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Highest access-frecency score among the files beneath it."
+          },
+          "relativePath": {
+            "type": "string",
+            "description": "Forward slashes, with a trailing `/`."
+          }
+        }
+      },
+      "DirSearchResponse": {
+        "type": "object",
+        "required": [
+          "items",
+          "totalMatched",
+          "totalDirs",
+          "page",
+          "pageSize",
+          "hasMore"
+        ],
+        "properties": {
+          "hasMore": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirHit"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalDirs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalMatched": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "EffectiveOptions": {
         "type": "object",
         "description": "The settings a workspace was actually created with, echoed back so a client never has to\nguess which defaults applied.",
@@ -332,6 +686,76 @@
           }
         }
       },
+      "FileItemDto": {
+        "type": "object",
+        "description": "An indexed file.",
+        "required": [
+          "relativePath",
+          "fileName",
+          "directory",
+          "absolutePath",
+          "size",
+          "modified",
+          "isBinary",
+          "accessFrecencyScore",
+          "modificationFrecencyScore",
+          "gitRecencyScore",
+          "totalFrecencyScore",
+          "gitStatus"
+        ],
+        "properties": {
+          "absolutePath": {
+            "type": "string",
+            "description": "Native separators, and free of any `\\\\?\\` prefix — so it is safe to open and safe to\ndisplay. Not an identity key.",
+            "example": "\\\\server\\share\\project\\src\\main.rs"
+          },
+          "accessFrecencyScore": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "directory": {
+            "type": "string",
+            "description": "Parent directory, with a trailing `/`. Empty at the root."
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "gitRecencyScore": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Boost from recent commits on the current branch. Reported separately because\n`totalFrecencyScore` does **not** include it, so it would otherwise be invisible."
+          },
+          "gitStatus": {
+            "$ref": "#/components/schemas/GitStatus"
+          },
+          "isBinary": {
+            "type": "boolean"
+          },
+          "modificationFrecencyScore": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "modified": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "relativePath": {
+            "type": "string",
+            "description": "Repo-relative, **forward slashes on every platform**, carrying on-disk casing. This\nis what the engine stores and what globs and path constraints match against.",
+            "example": "crates/fff-core/src/types.rs"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "totalFrecencyScore": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Access plus modification only — deliberately excluding `gitRecencyScore`, matching\nthe engine's own `total_frecency_score()`."
+          }
+        }
+      },
       "GitRecency": {
         "type": "object",
         "properties": {
@@ -356,6 +780,84 @@
             ],
             "description": "Commits touching more files than this are ignored, so a sweeping commit does not\nboost the whole tree.",
             "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "GitStatus": {
+        "type": "object",
+        "description": "Git status, in full.\n\n`git2::Status` is a bitflags value — a file can be staged-modified *and* worktree-modified\nat once. Every other fff binding flattens it to one string and loses that, so both forms\nare emitted: `status` for convenience, `flags` for fidelity.",
+        "required": [
+          "status",
+          "flags"
+        ],
+        "properties": {
+          "flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Every set bit, so a client can see combinations the single label hides.",
+            "example": [
+              "stagedModified",
+              "modified"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "fff's own single-label vocabulary: `clean`, `modified`, `untracked`, `staged_new`,\n`staged_modified`, `staged_deleted`, `deleted`, `renamed`, `ignored`, `unknown`.",
+            "example": "modified"
+          }
+        }
+      },
+      "GitStatusConstraint": {
+        "type": "string",
+        "description": "Git status filter, mirroring the engine's four categories.",
+        "enum": [
+          "modified",
+          "untracked",
+          "staged",
+          "unmodified"
+        ]
+      },
+      "GlobRequest": {
+        "type": "object",
+        "description": "Glob-only request. Bypasses the query parser entirely: the pattern is used literally,\nresults are frecency-ranked. Use it when the pattern is already a glob and fuzzy\nmatching on top would only add noise.",
+        "required": [
+          "pattern"
+        ],
+        "properties": {
+          "currentFile": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "maxThreads": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "page": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "pattern": {
+            "type": "string",
+            "description": "Forward slashes only — the matcher does not treat `\\` as a separator.",
+            "example": "**/*.rs"
           }
         },
         "additionalProperties": false
@@ -398,6 +900,201 @@
           }
         }
       },
+      "LineCol": {
+        "type": "object",
+        "required": [
+          "line",
+          "col"
+        ],
+        "properties": {
+          "col": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "line": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "LocationDto": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "line",
+              "type"
+            ],
+            "properties": {
+              "line": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "line"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "line",
+              "col",
+              "type"
+            ],
+            "properties": {
+              "col": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "line": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "position"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "start",
+              "end",
+              "type"
+            ],
+            "properties": {
+              "end": {
+                "$ref": "#/components/schemas/LineCol"
+              },
+              "start": {
+                "$ref": "#/components/schemas/LineCol"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "range"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "A `file.ts:42:10` suffix parsed out of the query. The MCP server discards this entirely."
+      },
+      "MixedHit": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "item",
+              "score",
+              "type"
+            ],
+            "properties": {
+              "item": {
+                "$ref": "#/components/schemas/FileItemDto"
+              },
+              "score": {
+                "$ref": "#/components/schemas/ScoreDto"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "file"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "item",
+              "score",
+              "type"
+            ],
+            "properties": {
+              "item": {
+                "$ref": "#/components/schemas/DirItemDto"
+              },
+              "score": {
+                "$ref": "#/components/schemas/ScoreDto"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "directory"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "A hit from a mixed search, tagged by kind."
+      },
+      "MixedSearchResponse": {
+        "type": "object",
+        "required": [
+          "items",
+          "totalMatched",
+          "totalFiles",
+          "totalDirs",
+          "page",
+          "pageSize",
+          "hasMore"
+        ],
+        "properties": {
+          "hasMore": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MixedHit"
+            }
+          },
+          "location": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LocationDto"
+              }
+            ]
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalDirs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalFiles": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalMatched": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "Problem": {
         "type": "object",
         "description": "RFC 9457 problem details. ASP.NET Core deserialises this into `ProblemDetails` with no\nclient-side code.\n\nClients switch on `code`, never on `detail`: `code` is a stable identifier, `detail` is\nprose from the engine and may change between fff releases.",
@@ -434,6 +1131,337 @@
             "type": "string",
             "description": "Stable URN identifying the error class.",
             "example": "urn:fff-server:error:invalid-path"
+          }
+        }
+      },
+      "ScoreDto": {
+        "type": "object",
+        "description": "The complete score breakdown: all 13 fields the engine computes.",
+        "required": [
+          "total",
+          "baseScore",
+          "filenameBonus",
+          "specialFilenameBonus",
+          "frecencyBoost",
+          "gitStatusBoost",
+          "gitRecencyBoost",
+          "distancePenalty",
+          "currentFilePenalty",
+          "comboMatchBoost",
+          "pathAlignmentBonus",
+          "exactMatch",
+          "matchType"
+        ],
+        "properties": {
+          "baseScore": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "comboMatchBoost": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "currentFilePenalty": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "distancePenalty": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "exactMatch": {
+            "type": "boolean"
+          },
+          "filenameBonus": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "frecencyBoost": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "gitRecencyBoost": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Added in fff 0.11; absent from every other binding."
+          },
+          "gitStatusBoost": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Dropped by the C ABI and by the TypeScript SDK."
+          },
+          "matchType": {
+            "type": "string",
+            "description": "Documented as an **open** string, not a closed enum: it is a bare `&'static str` in\nthe engine with no enum backing it, so a future value must not break a client.\nKnown values include `fuzzy`, `fuzzy_filename`, `exact`, `prefix`, `path`.",
+            "example": "fuzzy_filename"
+          },
+          "pathAlignmentBonus": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Dropped by the TypeScript SDK."
+          },
+          "specialFilenameBonus": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SearchHit": {
+        "type": "object",
+        "description": "One file hit, with its score and match highlighting.\n\nThe engine returns items, scores and match offsets as three parallel arrays; they are\nzipped here. Nothing is lost, and a generated C# client is far better for it.",
+        "required": [
+          "item",
+          "score",
+          "matchRangesUtf16"
+        ],
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/FileItemDto"
+          },
+          "matchRangesUtf16": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Utf16Range"
+            },
+            "description": "Which parts of `item.relativePath` matched, in UTF-16 code units. The MCP server\ndiscards this information entirely."
+          },
+          "score": {
+            "$ref": "#/components/schemas/ScoreDto"
+          }
+        }
+      },
+      "SearchRequest": {
+        "type": "object",
+        "description": "Search request. Supply `query`, or `structured`, or neither (an empty query ranks the\nwhole index by frecency). Supplying both is rejected rather than silently preferring one.",
+        "properties": {
+          "comboBoostMultiplier": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Query-history combo boost. Only has an effect once a client reports selections via\n`track-query`."
+          },
+          "currentFile": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A path to deprioritise, so the file a caller is already looking at does not dominate\nits own results. Also feeds the distance bonus for nearby paths."
+          },
+          "maxThreads": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "0 lets the engine choose.",
+            "minimum": 0
+          },
+          "minComboCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "page": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Zero-based page index.",
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Defaults to `defaults.page_size`.",
+            "minimum": 0
+          },
+          "query": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The raw fff query DSL, e.g. `git:modified src/**/*.rs !tests/ user controller`.\nPassed to the engine byte-for-byte. Glob separators must be `/`.",
+            "example": "src/**/*.rs button"
+          },
+          "structured": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StructuredQuery",
+                "description": "Constraints as data, instead of a DSL string."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "SearchResponse": {
+        "type": "object",
+        "required": [
+          "items",
+          "totalMatched",
+          "totalFiles",
+          "page",
+          "pageSize",
+          "hasMore"
+        ],
+        "properties": {
+          "hasMore": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHit"
+            }
+          },
+          "location": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LocationDto",
+                "description": "A `file.ts:42:10` suffix parsed out of the query, if present."
+              }
+            ]
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalFiles": {
+            "type": "integer",
+            "description": "Files in the index.",
+            "minimum": 0
+          },
+          "totalMatched": {
+            "type": "integer",
+            "description": "Matches across the whole index, not just this page.",
+            "minimum": 0
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Non-fatal notes about the query — currently backslashes in glob-looking tokens,\nwhich would otherwise match nothing with no explanation."
+          }
+        }
+      },
+      "StructuredQuery": {
+        "type": "object",
+        "description": "Constraints as data, for clients that would rather not build DSL strings.\n\nSeparators are folded in `globs`, `pathSegments`, `filePaths` and `excludePathSegments`,\nwhere a separator is unambiguously a separator. The engine's glob backend treats **only**\n`/` as a separator, so without folding `src\\**\\*.rs` would not be applied as a glob at\nall — it would fall through to fuzzy text matching and quietly return unrelated results.",
+        "properties": {
+          "excludePathSegments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Path segments to exclude."
+          },
+          "excludeText": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Literal text to exclude."
+          },
+          "extensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Bare extensions, without a dot: `rs`, `md`."
+          },
+          "filePaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Exact repo-relative file paths."
+          },
+          "fileTypes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Engine file-type names, e.g. `rust`."
+          },
+          "fuzzy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Free-text fuzzy terms. Split on whitespace into parts, as the DSL parser would."
+          },
+          "gitStatus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GitStatusConstraint"
+              }
+            ]
+          },
+          "globs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Glob patterns, e.g. `src/**/*.rs`."
+          },
+          "pathSegments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Path segments a result must contain, e.g. `src`."
+          },
+          "text": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Literal text a path must contain."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Utf16Range": {
+        "type": "object",
+        "description": "A half-open range of **UTF-16 code units**.\n\nThe engine produces UTF-8 byte offsets. Those are converted here because .NET strings\nare UTF-16: a byte offset would silently address the wrong characters on any line\ncontaining non-ASCII, and the point of this API is that the client does no\npost-processing.",
+        "required": [
+          "start",
+          "end"
+        ],
+        "properties": {
+          "end": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "start": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
           }
         }
       },
@@ -581,6 +1609,10 @@
     {
       "name": "workspaces",
       "description": "Indexed roots and their lifecycle"
+    },
+    {
+      "name": "search",
+      "description": "Fuzzy path search and glob matching"
     }
   ]
 }

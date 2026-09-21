@@ -8,6 +8,7 @@ pub mod extract;
 pub mod guard;
 pub mod logging;
 pub mod paths;
+pub mod query;
 pub mod routes;
 pub mod state;
 pub mod workspace;
@@ -42,6 +43,7 @@ const SWEEP_INTERVAL: Duration = Duration::from_secs(30);
     tags(
         (name = "meta", description = "Server health and contract"),
         (name = "workspaces", description = "Indexed roots and their lifecycle"),
+        (name = "search", description = "Fuzzy path search and glob matching"),
     ),
 )]
 pub struct ApiDoc;
@@ -57,6 +59,10 @@ pub fn build(config: Config) -> (Router, utoipa::openapi::OpenApi, AppState) {
             routes::workspaces::list
         ))
         .routes(routes!(routes::workspaces::get, routes::workspaces::delete))
+        .routes(routes!(routes::search::search))
+        .routes(routes!(routes::search::search_directories))
+        .routes(routes!(routes::search::search_mixed))
+        .routes(routes!(routes::search::glob))
         .with_state(state.clone())
         .split_for_parts();
 
