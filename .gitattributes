@@ -5,3 +5,7 @@ openapi.json text eol=lf
 *.rs text eol=lf
 *.toml text eol=lf
 *.md text eol=lf
+
+# The fixture tree carries exact byte offsets that tests assert on. CRLF on checkout would
+# shift lineContent and break them on a fresh clone, so pin every fixture to LF.
+tests/fixtures/** text eol=lf
