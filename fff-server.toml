@@ -1,0 +1,56 @@
+# fff-server configuration. Every key here is the built-in default, so an empty file (or no
+# file at all) behaves identically. CLI flags and FFF_SERVER_* env vars override these;
+# nested keys use a double underscore, e.g. FFF_SERVER_SERVER__BIND=127.0.0.1:9000
+
+[server]
+# Lab default listens on every interface. Needs an inbound Windows firewall rule for the
+# port before other machines can reach it.
+bind = "0.0.0.0:8080"
+# Uncomment to require `Authorization: Bearer <token>`. With no token, any caller that can
+# reach this port can index and search any path this process can read.
+# token = "change-me"
+
+[workspaces]
+# Creation blocks for at most this long, then returns 202 and the client polls
+# GET /v1/workspaces/{id}. A local root finishes well inside it; an 87k-file share does not
+# (measured 59.5s to scan).
+create_block_ms = 10000
+
+# Parent directory for per-workspace LMDB databases. Each workspace gets its own
+# subdirectory: the LMDB env pool rejects two trackers sharing one path.
+# Defaults to %PROGRAMDATA%\fff-server\db
+# db_root = "C:/ProgramData/fff-server/db"
+
+# Empty means any readable path may be indexed.
+allowed_roots = []
+
+# Rescan interval = clamp(time_to_ready * duty_factor, min, max).
+# Keyed off time-to-ready, not scan time: content indexing measured ~20x the walk, and a
+# rescan pays both phases. Set min == max to pin a fixed interval.
+rescan_duty_factor = 25
+rescan_min_secs = 60
+rescan_max_secs = 1800
+
+# Idle eviction = clamp(time_to_ready * idle_factor, min, max).
+# Expensive indexes earn a longer life, because dropping one charges the next caller for a
+# full rebuild.
+idle_factor = 120
+idle_min_secs = 1800
+idle_max_secs = 86400
+
+[defaults]
+# Per-workspace defaults, all overridable on POST /v1/workspaces.
+ai_mode = true
+content_indexing = true
+watch = true
+follow_symlinks = false
+page_size = 100
+grep_page_size = 50
+# 0 disables the budget. A 5s budget would truncate a network grep at roughly 700 of 87k
+# files (measured ~7ms/file over SMB), so clients page with cursors instead.
+grep_time_budget_ms = 0
+
+[logging]
+# RUST_LOG overrides this when set, which also lets you raise fff-core's own level.
+level = "info"
+json = false

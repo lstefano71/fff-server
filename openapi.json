@@ -1,0 +1,120 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "fff-server",
+    "description": "Typed HTTP access to the fff file-search engine.",
+    "license": {
+      "name": "MIT"
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Server is answering",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "description": "Server liveness and, once the pool exists, per-workspace readiness.",
+        "required": [
+          "status",
+          "version",
+          "engineVersion",
+          "uptimeSeconds",
+          "workspaceCount"
+        ],
+        "properties": {
+          "engineVersion": {
+            "type": "string",
+            "description": "The `fff-search` release this binary is built against.",
+            "example": "0.11.0"
+          },
+          "status": {
+            "type": "string",
+            "description": "Always `\"ok\"` when the process is answering.",
+            "example": "ok"
+          },
+          "uptimeSeconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Seconds since process start.",
+            "minimum": 0
+          },
+          "version": {
+            "type": "string",
+            "description": "This server's version."
+          },
+          "workspaceCount": {
+            "type": "integer",
+            "description": "Number of live workspaces in the pool.",
+            "minimum": 0
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "description": "RFC 9457 problem details. ASP.NET Core deserialises this into `ProblemDetails` with no\nclient-side code.\n\nClients switch on `code`, never on `detail`: `code` is a stable identifier, `detail` is\nprose from the engine and may change between fff releases.",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable machine-readable code. Switch on this.",
+            "example": "invalid-path"
+          },
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Prose explanation for this occurrence. Not stable; do not parse."
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HTTP status code, repeated here as RFC 9457 specifies.",
+            "minimum": 0
+          },
+          "title": {
+            "type": "string",
+            "description": "Short, human-readable summary of the error class."
+          },
+          "type": {
+            "type": "string",
+            "description": "Stable URN identifying the error class.",
+            "example": "urn:fff-server:error:invalid-path"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "meta",
+      "description": "Server health and contract"
+    }
+  ]
+}
