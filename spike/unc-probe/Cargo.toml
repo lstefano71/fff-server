@@ -1,0 +1,10 @@
+[package]
+name = "unc-probe"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dunce = "1.0.5"
+fff-search = "0.11"
+
+[workspace]
