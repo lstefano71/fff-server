@@ -18,6 +18,8 @@ use crate::config::Config;
 use crate::error::{ApiError, ApiResult};
 use crate::paths::CanonicalRoot;
 
+const NOT_READY: u64 = u64::MAX;
+
 /// How far creation should block before answering.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -133,13 +135,13 @@ pub struct Workspace {
     pub query_tracker: SharedQueryTracker,
 
     pub created_at: SystemTime,
-    /// Time from construction to the requested readiness stage. Drives both the rescan
-    /// interval and the idle timeout.
-    pub time_to_ready: Duration,
+    /// Actual time until content indexing completed. Zero while still warming.
+    time_to_ready_ms: AtomicU64,
 
     last_touched: AtomicU64,
-    /// Monotonic, for interval arithmetic.
-    last_scan_started: AtomicU64,
+    /// Monotonic second at which the current index most recently became ready.
+    /// `NOT_READY` while a scan or post-scan content build is active.
+    ready_since: AtomicU64,
     /// Wall clock, for reporting. Kept separately so a clock change cannot disturb the
     /// rescan schedule.
     last_scan_at_unix: AtomicU64,
@@ -243,8 +245,17 @@ impl Workspace {
             }
         }
 
-        let origin = Instant::now();
         let elapsed_ms = started.elapsed().as_millis() as u64;
+        let warmup_complete = picker
+            .read()
+            .ok()
+            .and_then(|guard| {
+                guard
+                    .as_ref()
+                    .map(|p| p.get_scan_progress().is_warmup_complete)
+            })
+            .unwrap_or(false);
+        let ready_at = warmup_complete.then(|| started.elapsed().as_secs());
 
         Ok(Self {
             id,
@@ -256,11 +267,15 @@ impl Workspace {
             frecency,
             query_tracker,
             created_at: SystemTime::now(),
-            time_to_ready: Duration::from_millis(elapsed_ms),
+            time_to_ready_ms: AtomicU64::new(if warmup_complete {
+                elapsed_ms.max(1)
+            } else {
+                0
+            }),
             last_touched: AtomicU64::new(0),
-            last_scan_started: AtomicU64::new(0),
+            ready_since: AtomicU64::new(ready_at.unwrap_or(NOT_READY)),
             last_scan_at_unix: AtomicU64::new(unix_now()),
-            origin,
+            origin: started,
         })
     }
 
@@ -282,24 +297,48 @@ impl Workspace {
             .saturating_sub(Duration::from_secs(last))
     }
 
-    pub fn since_last_scan(&self) -> Duration {
-        let last = self.last_scan_started.load(Ordering::Relaxed);
-        self.origin
-            .elapsed()
-            .saturating_sub(Duration::from_secs(last))
+    /// Actual initial warmup duration once known; elapsed time so far while warming.
+    pub fn time_to_ready(&self) -> Duration {
+        let _ = self.progress();
+        let observed = self.time_to_ready_ms.load(Ordering::Acquire);
+        if observed == 0 {
+            self.origin.elapsed()
+        } else {
+            Duration::from_millis(observed)
+        }
     }
 
     fn mark_scan_started(&self) {
-        self.last_scan_started
-            .store(self.origin.elapsed().as_secs(), Ordering::Relaxed);
+        self.ready_since.store(NOT_READY, Ordering::Release);
         self.last_scan_at_unix.store(unix_now(), Ordering::Relaxed);
+    }
+
+    pub fn periodic_rescan_due(&self, interval: Duration) -> bool {
+        let progress = self.progress();
+        rescan_is_due(
+            &progress,
+            self.ready_since.load(Ordering::Acquire),
+            self.origin.elapsed().as_secs(),
+            interval.as_secs(),
+        )
+    }
+
+    pub fn ready_for_maintenance(&self) -> bool {
+        let progress = self.progress();
+        !progress.is_scanning && progress.is_warmup_complete
     }
 
     /// Explicit rescan. The precise tool: a client that knows it changed something should
     /// say so rather than wait for the timer.
     pub fn rescan(&self) -> ApiResult<()> {
-        self.mark_scan_started();
+        let progress = self.progress();
+        if progress.is_scanning || !progress.is_warmup_complete {
+            return Err(ApiError::NotReady(
+                "cannot rescan while scanning or content indexing is active".into(),
+            ));
+        }
         self.picker.trigger_full_rescan_async(&self.frecency)?;
+        self.mark_scan_started();
         Ok(())
     }
 
@@ -310,7 +349,7 @@ impl Workspace {
     /// Current readiness, read straight from the engine rather than cached, so a client
     /// polling after a 202 sees the real state.
     pub fn progress(&self) -> Progress {
-        match self.picker.read() {
+        let progress = match self.picker.read() {
             Ok(guard) => match guard.as_ref() {
                 Some(p) => {
                     let sp = p.get_scan_progress();
@@ -332,6 +371,30 @@ impl Workspace {
                 tracing::warn!(workspace = %self.id, error = %e, "picker lock unavailable");
                 Progress::default()
             }
+        };
+        self.observe_readiness(&progress);
+        progress
+    }
+
+    fn observe_readiness(&self, progress: &Progress) {
+        if progress.is_scanning || !progress.is_warmup_complete {
+            self.ready_since.store(NOT_READY, Ordering::Release);
+            return;
+        }
+
+        let now_secs = self.origin.elapsed().as_secs();
+        if self
+            .ready_since
+            .compare_exchange(NOT_READY, now_secs, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            let elapsed_ms = self.origin.elapsed().as_millis().max(1) as u64;
+            let _ = self.time_to_ready_ms.compare_exchange(
+                0,
+                elapsed_ms,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            );
         }
     }
 
@@ -345,5 +408,46 @@ impl Workspace {
         if let Err(e) = self.query_tracker.destroy() {
             tracing::warn!(workspace = %self.id, error = %e, "query tracker teardown failed");
         }
+    }
+}
+
+fn rescan_is_due(progress: &Progress, ready_since: u64, now_secs: u64, interval_secs: u64) -> bool {
+    ready_for_maintenance(progress)
+        && ready_since != NOT_READY
+        && now_secs.saturating_sub(ready_since) >= interval_secs
+}
+
+fn ready_for_maintenance(progress: &Progress) -> bool {
+    !progress.is_scanning && progress.is_warmup_complete
+}
+
+#[cfg(test)]
+mod scheduler_tests {
+    use super::*;
+
+    fn ready_progress() -> Progress {
+        Progress {
+            installed: true,
+            is_warmup_complete: true,
+            ..Progress::default()
+        }
+    }
+
+    #[test]
+    fn periodic_rescan_waits_for_warmup_and_a_full_ready_interval() {
+        let mut progress = ready_progress();
+        progress.is_warmup_complete = false;
+        assert!(!ready_for_maintenance(&progress));
+        assert!(!rescan_is_due(&progress, NOT_READY, 600, 60));
+
+        progress.is_warmup_complete = true;
+        progress.is_scanning = true;
+        assert!(!ready_for_maintenance(&progress));
+        assert!(!rescan_is_due(&progress, NOT_READY, 600, 60));
+
+        progress.is_scanning = false;
+        assert!(ready_for_maintenance(&progress));
+        assert!(!rescan_is_due(&progress, 590, 600, 60));
+        assert!(rescan_is_due(&progress, 540, 600, 60));
     }
 }

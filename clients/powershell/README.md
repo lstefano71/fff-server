@@ -133,10 +133,11 @@ fg 'TODO' -TimeBudgetMs 5000 -EnforceTimeBudget
 
 ### What the content index does
 
-The content index is a compact bigram index used by `-Mode Fuzzy` to identify likely files.
-It is not a stored copy of every file. On Windows, fff's memory-mapped content cache is
-compiled out, so `Plain`, `Regex`, and the final verification step of `Fuzzy` read candidate
-files from disk.
+The content index is a compact bigram index used by all grep modes to identify likely files
+when the pattern provides useful bigrams. Fuzzy mode depends on it for typo-tolerant
+candidate selection. It is not a stored copy of every file. On Windows, fff's memory-mapped
+content cache is compiled out, so `Plain`, `Regex`, and the final verification step of
+`Fuzzy` read candidate files from disk.
 
 Consequently, an exact query with no early match can be expensive over a large SMB tree and
 can trigger substantial Windows Defender activity:

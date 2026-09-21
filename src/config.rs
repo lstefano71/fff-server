@@ -123,9 +123,7 @@ fn default_db_root() -> PathBuf {
 }
 
 impl Config {
-    /// Derived rescan interval for a workspace that took `time_to_ready` to become usable.
-    /// Keyed off time-to-ready rather than scan duration: content indexing measured ~20x the
-    /// walk, and a rescan pays both phases.
+    /// Derived rescan interval for a workspace's observed content-index warmup cost.
     pub fn rescan_interval(&self, time_to_ready: std::time::Duration) -> std::time::Duration {
         let scaled = time_to_ready.as_secs_f64() * f64::from(self.workspaces.rescan_duty_factor);
         clamp_secs(

@@ -51,8 +51,8 @@ pub struct WorkspaceResource {
 
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
-    /// Time from construction to the readiness stage the creating call waited for. Drives
-    /// both derived intervals below.
+    /// Observed time from construction until content indexing first completed. While the
+    /// workspace is still warming, this is elapsed time so far.
     pub time_to_ready_ms: u64,
     #[serde(with = "time::serde::rfc3339")]
     pub last_scan_at: OffsetDateTime,
@@ -89,7 +89,7 @@ impl WorkspaceResource {
             has_git_repo: p.has_git_repo,
             git_root: p.git_root,
             created_at: OffsetDateTime::from(ws.created_at),
-            time_to_ready_ms: ws.time_to_ready.as_millis() as u64,
+            time_to_ready_ms: ws.time_to_ready().as_millis() as u64,
             last_scan_at: unix_to_offset(ws.last_scan_at()),
             rescan_interval_secs,
             idle_timeout_secs,

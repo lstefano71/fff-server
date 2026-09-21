@@ -358,10 +358,17 @@ min_interval = 60 s
 max_interval = 1800 s
 ```
 
-`time_to_ready` is time to *indexing-complete*, not to scan-complete. This matters more than
+`time_to_ready` is observed time to *indexing-complete*, not the HTTP creation wait and not
+scan-complete. Creation may return `202` after ten seconds, but measurement continues until
+the workspace first reports `isWarmupComplete`. This matters more than
 it looks: a 159-file slice scanned in 374 ms but reached indexing-complete at 7.76 s —
 content indexing was 20× the walk. A rescan pays both phases, so keying off scan duration
 alone would underestimate its cost twentyfold.
+
+The rescan clock starts when the workspace becomes ready and is reset when each later rescan
+finishes. Maintenance never requests or queues a periodic rescan while a filesystem scan or
+post-scan content build is active. Otherwise, a workspace whose warmup exceeds its interval
+could remain in a scan → index → queued scan loop.
 
 Keying off measured cost rather than `isNetworkPath` is deliberate. What varies is how
 expensive a rescan is, which is a property of tree size and per-file overhead, not of

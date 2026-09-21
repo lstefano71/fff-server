@@ -130,20 +130,20 @@ impl Pool {
         workspace.touch();
         tracing::info!(
             workspace = %workspace.id,
-            time_to_ready_ms = workspace.time_to_ready.as_millis(),
+            time_to_ready_ms = workspace.time_to_ready().as_millis(),
             rescan_interval_s = self.rescan_interval(&workspace).as_secs(),
             idle_timeout_s = self.idle_timeout(&workspace).as_secs(),
-            "workspace ready"
+            "workspace created"
         );
         Ok((workspace, Created::New))
     }
 
     pub fn rescan_interval(&self, ws: &Workspace) -> Duration {
-        self.config.rescan_interval(ws.time_to_ready)
+        self.config.rescan_interval(ws.time_to_ready())
     }
 
     pub fn idle_timeout(&self, ws: &Workspace) -> Duration {
-        self.config.idle_timeout(ws.time_to_ready)
+        self.config.idle_timeout(ws.time_to_ready())
     }
 
     /// One sweep of the maintenance loop. Returns (rescans triggered, workspaces evicted).
@@ -156,6 +156,10 @@ impl Pool {
         let mut evicted = 0;
 
         for ws in candidates {
+            if !ws.ready_for_maintenance() {
+                continue;
+            }
+
             if ws.idle_for() >= self.idle_timeout(&ws) {
                 tracing::info!(
                     workspace = %ws.id,
@@ -167,7 +171,7 @@ impl Pool {
                 continue;
             }
 
-            if ws.since_last_scan() >= self.rescan_interval(&ws) {
+            if ws.periodic_rescan_due(self.rescan_interval(&ws)) {
                 match ws.rescan() {
                     Ok(()) => {
                         tracing::debug!(workspace = %ws.id, "periodic rescan triggered");

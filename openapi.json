@@ -2835,7 +2835,7 @@
           "timeToReadyMs": {
             "type": "integer",
             "format": "int64",
-            "description": "Time from construction to the readiness stage the creating call waited for. Drives\nboth derived intervals below.",
+            "description": "Observed time from construction until content indexing first completed. While the\nworkspace is still warming, this is elapsed time so far.",
             "minimum": 0
           }
         }
