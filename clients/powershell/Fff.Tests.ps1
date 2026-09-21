@@ -18,6 +18,7 @@ try {
     & $module {
         $script:Fff.BaseUrl = 'http://test'
         $script:Fff.WorkspaceId = 'workspace'
+        $script:CapturedGrepBody = $null
 
         function Invoke-FffApi {
             param($Method, $Path, $Body, $TimeoutSeconds)
@@ -43,6 +44,7 @@ try {
                 return [pscustomobject]@{ items = @(); hasMore = $false }
             }
             if ($Path -like '*/grep') {
+                $script:CapturedGrepBody = $Body
                 return [pscustomobject]@{
                     matches         = @()
                     files           = @()
@@ -52,7 +54,9 @@ try {
         }
 
         Find-FffFile 'missing optional fields' | Out-Null
-        Find-FffText 'missing optional fields' | Out-Null
+        Find-FffText 'missing optional fields' -TimeBudgetMs 100 -EnforceTimeBudget | Out-Null
+        Assert-Equal $true $script:CapturedGrepBody.enforceTimeBudget `
+            'Find-FffText must expose the zero-match time-budget safeguard.'
     }
 
     & $module {

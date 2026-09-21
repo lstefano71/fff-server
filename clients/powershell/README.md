@@ -119,6 +119,7 @@ fg 'TODO' -Context 2
 fg 'class Customer' -Definitions
 fg 'TODO' -Take 200 -All
 fg 'TODO' -TimeBudgetMs 5000
+fg 'TODO' -TimeBudgetMs 5000 -EnforceTimeBudget
 ```
 
 - `-Casing` accepts `Smart`, `Sensitive`, or `Insensitive`.
@@ -126,6 +127,33 @@ fg 'TODO' -TimeBudgetMs 5000
 - `-Definitions` asks the server to classify definition-like matches.
 - `-All` follows continuation cursors until the search is exhausted.
 - `-TimeBudgetMs` limits each server request. Zero means unbounded.
+- `-EnforceTimeBudget` also stops a request that has not found its first match yet. Without
+  it, the engine may scan the complete candidate set to distinguish "no matches" from
+  "not searched far enough."
+
+### What the content index does
+
+The content index is a compact bigram index used by `-Mode Fuzzy` to identify likely files.
+It is not a stored copy of every file. On Windows, fff's memory-mapped content cache is
+compiled out, so `Plain`, `Regex`, and the final verification step of `Fuzzy` read candidate
+files from disk.
+
+Consequently, an exact query with no early match can be expensive over a large SMB tree and
+can trigger substantial Windows Defender activity:
+
+```powershell
+# Exact scan. Potentially reads every eligible file.
+fg 'TODO' -Mode Plain
+
+# Uses the bigram index to reduce candidate files, but allows near matches.
+fg 'TODO' -Mode Fuzzy
+
+# Bound an interactive exact search, including the zero-match case.
+fg 'TODO' -Mode Plain -TimeBudgetMs 5000 -EnforceTimeBudget
+```
+
+`Auto` chooses between `Plain` and `Regex`; it does not select `Fuzzy`. Use `-Mode Fuzzy`
+explicitly when typo tolerance and indexed candidate selection are appropriate.
 
 Pipe results through `Format-FffMatch` for readable, highlighted output:
 

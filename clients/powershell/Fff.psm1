@@ -399,7 +399,9 @@ function Find-FffText {
         [switch]$Definitions,
         [switch]$All,
         # Stop after this many milliseconds and return what was found. 0 = unbounded.
-        [int]$TimeBudgetMs = 0
+        [int]$TimeBudgetMs = 0,
+        # Apply the budget even when no match has been found yet.
+        [switch]$EnforceTimeBudget
     )
 
     $id = Assert-FffWorkspace
@@ -416,6 +418,7 @@ function Find-FffText {
             afterContext        = $Context
             classifyDefinitions = [bool]$Definitions
             timeBudgetMs        = $TimeBudgetMs
+            enforceTimeBudget   = [bool]$EnforceTimeBudget
         }
         if ($cursor) { $body.cursor = $cursor }
 
