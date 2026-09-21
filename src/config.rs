@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// Layered configuration: struct defaults, then the TOML file, then `FFF_SERVER_*`
 /// environment variables, then CLI flags. See DESIGN.md.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub server: Server,
@@ -64,17 +64,6 @@ pub struct Defaults {
 pub struct Logging {
     pub level: String,
     pub json: bool,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            server: Server::default(),
-            workspaces: Workspaces::default(),
-            defaults: Defaults::default(),
-            logging: Logging::default(),
-        }
-    }
 }
 
 impl Default for Server {
@@ -177,24 +166,45 @@ mod tests {
         let c = Config::default();
 
         // A trivial local tree lands on the floor rather than rescanning every second.
-        assert_eq!(c.rescan_interval(Duration::from_millis(29)), Duration::from_secs(60));
+        assert_eq!(
+            c.rescan_interval(Duration::from_millis(29)),
+            Duration::from_secs(60)
+        );
         // The measured 159-file UNC slice: 7.76s to ready -> 194s, inside the band.
-        assert_eq!(c.rescan_interval(Duration::from_millis(7_760)), Duration::from_secs(194));
+        assert_eq!(
+            c.rescan_interval(Duration::from_millis(7_760)),
+            Duration::from_secs(194)
+        );
         // Mid-band, to pin down the arithmetic: 60s * 25 = 1500s, still under the ceiling.
-        assert_eq!(c.rescan_interval(Duration::from_secs(60)), Duration::from_secs(1_500));
+        assert_eq!(
+            c.rescan_interval(Duration::from_secs(60)),
+            Duration::from_secs(1_500)
+        );
         // The measured 87k-file share never reached indexing-complete inside 120s, so its
         // real time_to_ready exceeds that and the ceiling applies.
-        assert_eq!(c.rescan_interval(Duration::from_secs(120)), Duration::from_secs(1_800));
+        assert_eq!(
+            c.rescan_interval(Duration::from_secs(120)),
+            Duration::from_secs(1_800)
+        );
     }
 
     #[test]
     fn idle_scales_with_cost() {
         let c = Config::default();
-        assert_eq!(c.idle_timeout(Duration::from_millis(29)), Duration::from_secs(1_800));
+        assert_eq!(
+            c.idle_timeout(Duration::from_millis(29)),
+            Duration::from_secs(1_800)
+        );
         // 7.76s * 120 = 931s, still under the 30min floor.
-        assert_eq!(c.idle_timeout(Duration::from_millis(7_760)), Duration::from_secs(1_800));
+        assert_eq!(
+            c.idle_timeout(Duration::from_millis(7_760)),
+            Duration::from_secs(1_800)
+        );
         // A minute to ready buys two hours of idle life.
-        assert_eq!(c.idle_timeout(Duration::from_secs(60)), Duration::from_secs(7_200));
+        assert_eq!(
+            c.idle_timeout(Duration::from_secs(60)),
+            Duration::from_secs(7_200)
+        );
     }
 
     #[test]
@@ -202,7 +212,13 @@ mod tests {
         let mut c = Config::default();
         c.workspaces.rescan_min_secs = 300;
         c.workspaces.rescan_max_secs = 300;
-        assert_eq!(c.rescan_interval(Duration::from_secs(1)), Duration::from_secs(300));
-        assert_eq!(c.rescan_interval(Duration::from_secs(600)), Duration::from_secs(300));
+        assert_eq!(
+            c.rescan_interval(Duration::from_secs(1)),
+            Duration::from_secs(300)
+        );
+        assert_eq!(
+            c.rescan_interval(Duration::from_secs(600)),
+            Duration::from_secs(300)
+        );
     }
 }

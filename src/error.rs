@@ -1,4 +1,4 @@
-use axum::http::{header, StatusCode};
+use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -31,6 +31,8 @@ pub struct Problem {
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
     #[error("{0}")]
+    InvalidBody(String),
+    #[error("{0}")]
     InvalidPath(String),
     #[error("{0}")]
     InvalidGlob(String),
@@ -49,6 +51,11 @@ pub enum ApiError {
 impl ApiError {
     fn parts(&self) -> (StatusCode, &'static str, &'static str) {
         match self {
+            Self::InvalidBody(_) => (
+                StatusCode::BAD_REQUEST,
+                "invalid-request-body",
+                "Invalid request body",
+            ),
             Self::InvalidPath(_) => (StatusCode::BAD_REQUEST, "invalid-path", "Invalid path"),
             Self::InvalidGlob(_) => (
                 StatusCode::BAD_REQUEST,
@@ -137,7 +144,8 @@ mod tests {
 
     #[test]
     fn type_field_serialises_as_type() {
-        let json = serde_json::to_string(&ApiError::NotFound("workspace".into()).problem()).unwrap();
+        let json =
+            serde_json::to_string(&ApiError::NotFound("workspace".into()).problem()).unwrap();
         assert!(json.contains(r#""type":"urn:fff-server:error:not-found""#));
         assert!(!json.contains("problemType"));
     }

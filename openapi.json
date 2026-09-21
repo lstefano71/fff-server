@@ -28,10 +28,338 @@
           }
         }
       }
+    },
+    "/v1/workspaces": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "List live workspaces.",
+        "operationId": "list",
+        "responses": {
+          "200": {
+            "description": "Live workspaces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "Create or warm a workspace.",
+        "description": "Returns `201` when the index reached the requested readiness stage inside the block\nbudget, and `202` when it did not — the resource is returned either way, and a `202`\nmeans poll `GET /v1/workspaces/{id}` rather than that anything failed.",
+        "operationId": "create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkspace"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Workspace ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceResource"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Workspace still indexing; poll the resource",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Root missing, not a directory, or too long",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Root refused: filesystem/share root, or outside allowed_roots",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Database already in use for this root",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{id}": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "Fetch one workspace, including current readiness. This is the poll target after a `202`.",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workspace id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceResource"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "Evict a workspace now, releasing its index, watcher threads and database handles.",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Workspace id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Evicted"
+          },
+          "404": {
+            "description": "No such workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "CacheBudget": {
+        "type": "object",
+        "properties": {
+          "maxBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "maxFileSize": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "maxFiles": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateWorkspace": {
+        "type": "object",
+        "description": "Per-workspace options, all defaulting from `[defaults]` in the config file.",
+        "required": [
+          "root"
+        ],
+        "properties": {
+          "aiMode": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "`FFFMode::Ai` when true. Changes frecency decay, modification-score thresholds and\nwatcher event handling. Fixed for the workspace's life."
+          },
+          "cacheBudget": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CacheBudget",
+                "description": "Explicit content-cache budget. Omitted, fff sizes it from the file count."
+              }
+            ]
+          },
+          "contentIndexing": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Builds the bigram content index (~360 bytes/file). Required for typo-resistant and\nfuzzy grep. Measured at roughly 20x the cost of the directory walk."
+          },
+          "followSymlinks": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "gitRecency": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GitRecency",
+                "description": "Ranking boost for files in recent commits on the current branch."
+              }
+            ]
+          },
+          "root": {
+            "type": "string",
+            "description": "Path to index. Any spelling; it is canonicalised and deduplicated by filesystem\nidentity, so a UNC path and a mapped drive pointing at one directory give one\nworkspace."
+          },
+          "waitFor": {
+            "$ref": "#/components/schemas/WaitFor",
+            "description": "Which readiness stage to block for."
+          },
+          "waitForIndexMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Overrides `workspaces.create_block_ms` for this call.",
+            "minimum": 0
+          },
+          "watch": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Background filesystem watcher. Verified working over SMB (~500ms)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "EffectiveOptions": {
+        "type": "object",
+        "description": "The settings a workspace was actually created with, echoed back so a client never has to\nguess which defaults applied.",
+        "required": [
+          "aiMode",
+          "contentIndexing",
+          "watch",
+          "followSymlinks",
+          "gitRecencyEnabled",
+          "gitRecencyMaxCommits",
+          "gitRecencyMaxFilesPerCommit"
+        ],
+        "properties": {
+          "aiMode": {
+            "type": "boolean"
+          },
+          "contentIndexing": {
+            "type": "boolean"
+          },
+          "followSymlinks": {
+            "type": "boolean"
+          },
+          "gitRecencyEnabled": {
+            "type": "boolean"
+          },
+          "gitRecencyMaxCommits": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "gitRecencyMaxFilesPerCommit": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "watch": {
+            "type": "boolean"
+          }
+        }
+      },
+      "GitRecency": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "maxCommits": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Commits to look back over. fff caps this at 128 internally.",
+            "minimum": 0
+          },
+          "maxFilesPerCommit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Commits touching more files than this are ignored, so a sweeping commit does not\nboost the whole tree.",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
       "Health": {
         "type": "object",
         "description": "Server liveness and, once the pool exists, per-workspace readiness.",
@@ -108,6 +436,140 @@
             "example": "urn:fff-server:error:invalid-path"
           }
         }
+      },
+      "WaitFor": {
+        "type": "string",
+        "description": "How far creation should block before answering.",
+        "enum": [
+          "scan",
+          "indexing",
+          "watcher"
+        ]
+      },
+      "WorkspaceList": {
+        "type": "object",
+        "description": "Listing response.",
+        "required": [
+          "workspaces"
+        ],
+        "properties": {
+          "workspaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceResource"
+            }
+          }
+        }
+      },
+      "WorkspaceResource": {
+        "type": "object",
+        "description": "A workspace as clients see it.",
+        "required": [
+          "id",
+          "root",
+          "isNetworkPath",
+          "status",
+          "isScanning",
+          "isWarmupComplete",
+          "isWatcherReady",
+          "indexedFiles",
+          "scannedFilesCount",
+          "hasGitRepo",
+          "createdAt",
+          "timeToReadyMs",
+          "lastScanAt",
+          "rescanIntervalSecs",
+          "idleTimeoutSecs",
+          "options"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "gitRoot": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Git worktree root, if one was discovered."
+          },
+          "hasGitRepo": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string",
+            "description": "Stable identifier, derived from the directory's filesystem identity. Re-creating the\nsame root — under any spelling, and across server restarts — returns this same id.",
+            "example": "9a4f1c2b7e0d5613"
+          },
+          "idleTimeoutSecs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Effective idle-eviction timeout, derived from `timeToReadyMs`.",
+            "minimum": 0
+          },
+          "indexedFiles": {
+            "type": "integer",
+            "description": "Files currently in the index.",
+            "minimum": 0
+          },
+          "isNetworkPath": {
+            "type": "boolean",
+            "description": "True when the root resolved to a UNC path, mapped drives included. Reported for\nvisibility only: freshness and eviction key off measured cost, not path type."
+          },
+          "isScanning": {
+            "type": "boolean"
+          },
+          "isWarmupComplete": {
+            "type": "boolean",
+            "description": "The content index is built. Fuzzy grep needs this, and the watcher is installed only\nafter it completes."
+          },
+          "isWatcherReady": {
+            "type": "boolean"
+          },
+          "lastScanAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "options": {
+            "$ref": "#/components/schemas/EffectiveOptions",
+            "description": "The settings this workspace was actually built with."
+          },
+          "rescanIntervalSecs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Effective automatic rescan interval, derived from `timeToReadyMs`.",
+            "minimum": 0
+          },
+          "root": {
+            "type": "string",
+            "description": "The resolved root, with any verbatim `\\\\?\\` prefix stripped. Display-and-open safe;\nnot an identity key.",
+            "example": "\\\\server\\share\\project"
+          },
+          "scannedFilesCount": {
+            "type": "integer",
+            "description": "Files seen by the most recent scan.",
+            "minimum": 0
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkspaceStatus"
+          },
+          "timeToReadyMs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Time from construction to the readiness stage the creating call waited for. Drives\nboth derived intervals below.",
+            "minimum": 0
+          }
+        }
+      },
+      "WorkspaceStatus": {
+        "type": "string",
+        "description": "Readiness, as a single field a client can branch on.",
+        "enum": [
+          "initialising",
+          "indexing",
+          "ready"
+        ]
       }
     }
   },
@@ -115,6 +577,10 @@
     {
       "name": "meta",
       "description": "Server health and contract"
+    },
+    {
+      "name": "workspaces",
+      "description": "Indexed roots and their lifecycle"
     }
   ]
 }

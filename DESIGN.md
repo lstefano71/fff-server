@@ -417,7 +417,13 @@ RFC 9457 `application/problem+json`, which ASP.NET Core consumes natively.
 | `DbInUse`, `EnvSpecMismatch` | 409 |
 | `ThreadPanic` | 500 |
 
-Each carries a stable machine-readable `code`; clients should switch on that, never on the
+A malformed request body is `400 invalid-request-body`. This needs its own extractor:
+`axum::Json`'s rejection is `text/plain`, which would leave the error a client is most likely
+to hit during development outside the contract, while every other error deserialises as
+`Problem`. `crate::extract::Json` wraps it and passes axum's field-level message through as
+`detail`.
+
+Each problem carries a stable machine-readable `code`; clients switch on that, never on the
 prose `detail`. `fff_search::Error` is `#[non_exhaustive]`, so known variants are mapped
 explicitly and a documented catch-all degrades a future variant to a generic 500.
 
@@ -615,10 +621,15 @@ stages are distinct, which is why workspace creation exposes all three.
 0. ~~**UNC spike**~~ — **done**, see Verified. It changed four decisions: creation returns
    `202` rather than blocking, identity is by file ID rather than path string, rescan and
    eviction intervals derive from measured cost, and nothing is special-cased for network
-   roots. `spike/unc-probe` is kept until step 2 lands, then deleted.
-1. Scaffold: crate, config, logging, `/v1/health`, `/openapi.json`, snapshot test.
-2. Workspace pool: canonicalisation (mapped drive → UNC), dedupe, create/warm/status/evict,
-   single-instance guard.
+   roots. `spike/unc-probe` is **retained** rather than deleted as originally planned: it
+   is still the only way to answer the open git-on-UNC risk above, and costs nothing to keep
+   (its own cargo workspace, excluded from the server build).
+1. ~~Scaffold: crate, config, logging, `/v1/health`, `/openapi.json`, snapshot test.~~
+   **Done.**
+2. ~~Workspace pool: canonicalisation, file-ID dedupe, create/warm/status/evict,
+   single-instance guard.~~ **Done.** Verified end to end: `D:/DEVEL/FFF-SERVER/` and
+   `D:/devel/fff-server` resolve to one workspace id; a second instance over one `db_root`
+   is refused; eviction stops the watcher and git worker cleanly.
 3. Search routes and DTOs.
 4. Grep routes: cursor pagination, cancellation, time budget.
 5. Lifecycle, tracking, `parse-query`.

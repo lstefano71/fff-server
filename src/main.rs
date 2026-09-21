@@ -2,18 +2,27 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use clap::Parser;
-use figment::providers::{Env, Format, Serialized, Toml};
 use figment::Figment;
+use figment::providers::{Env, Format, Serialized, Toml};
 use tower_http::trace::TraceLayer;
 
 use fff_server::config::Config;
 
 /// Layering order is defaults, then the TOML file, then `FFF_SERVER_*`, then these flags.
 #[derive(Debug, Parser)]
-#[command(name = "fff-server", version, about = "Typed HTTP access to fff file search")]
+#[command(
+    name = "fff-server",
+    version,
+    about = "Typed HTTP access to fff file search"
+)]
 struct Cli {
     /// Configuration file. Missing is fine — defaults apply.
-    #[arg(short, long, env = "FFF_SERVER_CONFIG", default_value = "fff-server.toml")]
+    #[arg(
+        short,
+        long,
+        env = "FFF_SERVER_CONFIG",
+        default_value = "fff-server.toml"
+    )]
     config: PathBuf,
 
     /// Overrides `server.bind`.
@@ -74,8 +83,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    let (router, _api) = fff_server::build(config);
+    // Held for the process lifetime: two servers over one db_root would collide on LMDB.
+    // Reported as plain text and a non-zero exit rather than a Debug-quoted error, since
+    // this is a startup condition an operator is meant to read and act on.
+    let guard = match fff_server::guard::InstanceGuard::acquire(&config.workspaces.db_root) {
+        Ok(guard) => guard,
+        Err(message) => {
+            eprintln!("fff-server: {message}");
+            std::process::exit(1);
+        }
+    };
+    tracing::debug!(lock = %guard.path().display(), "instance lock held");
+
+    let (router, _api, state) = fff_server::build(config);
     let router = router.layer(TraceLayer::new_for_http());
+
+    tokio::spawn(fff_server::maintenance(state.clone()));
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!(
@@ -89,6 +112,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_graceful_shutdown(shutdown())
         .await?;
 
+    // Watcher threads and LMDB environments close here rather than at process exit.
+    tracing::info!("draining workspaces");
+    let pool = state.pool.clone();
+    tokio::task::spawn_blocking(move || pool.shutdown_all()).await?;
+
+    drop(guard);
     tracing::info!("shutdown complete");
     Ok(())
 }

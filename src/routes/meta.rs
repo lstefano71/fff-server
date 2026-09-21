@@ -1,5 +1,5 @@
-use axum::extract::State;
 use axum::Json;
+use axum::extract::State;
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -35,6 +35,6 @@ pub async fn health(State(state): State<AppState>) -> Json<Health> {
         version: env!("CARGO_PKG_VERSION"),
         engine_version: crate::ENGINE_VERSION,
         uptime_seconds: state.started.elapsed().as_secs(),
-        workspace_count: 0,
+        workspace_count: state.pool.len(),
     })
 }
